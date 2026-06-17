@@ -2,51 +2,51 @@
 $ProgressPreference = 'SilentlyContinue'
 Write-Host "==================== Steam Patch Auto Install Tool ====================" -ForegroundColor Cyan
 
-# Config Area — Only modify the download link below
-$ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.rar"
-$TempZip = "$env:TEMP\steam_patch.rar"
+# Download URL Config
+$ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.zip"
+$TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
-$CopyItems = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
+$CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
 
-# Step1: Auto detect Steam root folder
+# Auto Locate Steam Folder
 $SteamRoot = $null
-# 1. User Registry HKCU
+# Read User Registry
 if(Test-Path "HKCU:\Software\Valve\Steam"){
-    $reg = Get-ItemProperty "HKCU:\Software\Valve\Steam"
-    if($reg.SteamPath -and (Test-Path "$($reg.SteamPath)\steam.exe")){
-        $SteamRoot = $reg.SteamPath.TrimEnd('\')
+    $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
+    if($regInfo.SteamPath -and (Test-Path "$($regInfo.SteamPath)\steam.exe")){
+        $SteamRoot = $regInfo.SteamPath.TrimEnd('\')
         Write-Host "✅ Detected Steam from user registry: $SteamRoot" -ForegroundColor Green
     }
 }
-# 2. System Registry HKLM Wow6432Node
+# Read System Registry
 if(-not $SteamRoot){
     if(Test-Path "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"){
-        $reg = Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"
-        if($reg.InstallPath -and (Test-Path "$($reg.InstallPath)\steam.exe")){
-            $SteamRoot = $reg.InstallPath.TrimEnd('\')
+        $regInfo = Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"
+        if($regInfo.InstallPath -and (Test-Path "$($regInfo.InstallPath)\steam.exe")){
+            $SteamRoot = $regInfo.InstallPath.TrimEnd('\')
             Write-Host "✅ Detected Steam from system registry: $SteamRoot" -ForegroundColor Green
         }
     }
 }
-# 3. Scan C/D/E/F disk Program Files (x86) & root Steam folder
+# Scan C/D/E/F Disk Steam Path
 if(-not $SteamRoot){
-    $disks = @("C:","D:","E:","F:")
-    foreach($d in $disks){
-        $testPath = "$d\Program Files (x86)\Steam"
-        if(Test-Path "$testPath\steam.exe"){
-            $SteamRoot = $testPath
-            Write-Host "✅ Detected Steam from $d\Program Files (x86)\Steam" -ForegroundColor Green
+    $diskArr = @("C:","D:","E:","F:")
+    foreach($disk in $diskArr){
+        $path1 = "$disk\Program Files (x86)\Steam"
+        if(Test-Path "$path1\steam.exe"){
+            $SteamRoot = $path1
+            Write-Host "✅ Detected Steam at $path1" -ForegroundColor Green
             break
         }
-        $testRoot = "$d\Steam"
-        if(Test-Path "$testRoot\steam.exe"){
-            $SteamRoot = $testRoot
-            Write-Host "✅ Detected Steam from $d\Steam" -ForegroundColor Green
+        $path2 = "$disk\Steam"
+        if(Test-Path "$path2\steam.exe"){
+            $SteamRoot = $path2
+            Write-Host "✅ Detected Steam at $path2" -ForegroundColor Green
             break
         }
     }
 }
-# 4. Fallback: running steam.exe process
+# Detect from running Steam Process
 if(-not $SteamRoot){
     $steamProc = Get-Process steam -ErrorAction SilentlyContinue
     if($steamProc){
@@ -55,72 +55,69 @@ if(-not $SteamRoot){
         Write-Host "✅ Detected Steam from running process: $SteamRoot" -ForegroundColor Green
     }
 }
-# Fail if no Steam found
+# Exit if Steam Not Found
 if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
-    Write-Host "❌ Cannot find Steam installation folder, exit." -ForegroundColor Red
-    Read-Host "Press Enter to close"
+    Write-Host "❌ Steam installation directory cannot be found, exit script." -ForegroundColor Red
+    Read-Host "Press Enter to close window"
     exit 1
 }
 
-# Step2: Kill all Steam processes
-Write-Host "`nClosing all Steam processes..." -ForegroundColor Yellow
+# Close All Steam Processes
+Write-Host "`nTerminating all Steam background processes..." -ForegroundColor Yellow
 Get-Process steam,steamwebhelper,steamerrorreporter -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 
-# Step3: Download patch archive from github pages
-Write-Host "`nDownloading patch package from server..." -ForegroundColor Yellow
+# Download Patch Zip Package
+Write-Host "`nDownloading patch resource package..." -ForegroundColor Yellow
 try{
-    $wc = New-Object System.Net.WebClient
-    $wc.DownloadFile($ZipUrl,$TempZip)
+    $webClient = New-Object System.Net.WebClient
+    $webClient.DownloadFile($ZipUrl,$TempZip)
 }catch{
-    Write-Host "❌ Failed to download patch file, check network or link." -ForegroundColor Red
-    Read-Host "Press Enter to close"
+    Write-Host "❌ Download failed, please check network or file link." -ForegroundColor Red
+    Read-Host "Press Enter to close window"
     exit 1
 }
 
-# Step4: Extract archive to temp folder
+# Clear & Create Temp Unzip Folder
 if(Test-Path $TempUnzip){Remove-Item $TempUnzip -Recurse -Force}
 New-Item $TempUnzip -ItemType Directory -Force | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-# Support rar/zip, if your file is zip replace .rar to .zip
-if($TempZip.EndsWith(".zip")){
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
-}
+[System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
 
-# Step5: Copy all patch files to Steam root
-Write-Host "`nCopying patch files to Steam directory..." -ForegroundColor Yellow
-$allSuccess = $true
-foreach($item in $CopyItems){
-    $src = Join-Path $TempUnzip $item
-    $dst = Join-Path $SteamRoot $item
-    if(Test-Path $src){
-        Copy-Item $src $dst -Recurse -Force
-        Write-Host "✅ Copied: $item" -ForegroundColor Green
+# Copy All Patch Files To Steam Folder
+Write-Host "`nCopying patch files to Steam root directory..." -ForegroundColor Yellow
+$installComplete = $true
+foreach($file in $CopyList){
+    $source = Join-Path $TempUnzip $file
+    $dest = Join-Path $SteamRoot $file
+    if(Test-Path $source){
+        Copy-Item $source $dest -Recurse -Force
+        Write-Host "✅ Copied file: $file" -ForegroundColor Green
     }else{
-        Write-Host "❌ Missing file: $item" -ForegroundColor Red
-        $allSuccess = $false
+        Write-Host "❌ Missing resource file: $file" -ForegroundColor Red
+        $installComplete = $false
     }
 }
 
-# Step6: Set steam.cfg read-only attribute
-$cfgPath = Join-Path $SteamRoot "steam.cfg"
-if(Test-Path $cfgPath){
-    (Get-Item $cfgPath).Attributes += [System.IO.FileAttributes]::ReadOnly
-    Write-Host "✅ steam.cfg set to read-only mode" -ForegroundColor Green
+# Lock steam.cfg To Read Only
+$cfgFullPath = Join-Path $SteamRoot "steam.cfg"
+if(Test-Path $cfgFullPath){
+    (Get-Item $cfgFullPath).Attributes += [System.IO.FileAttributes]::ReadOnly
+    Write-Host "✅ steam.cfg set to read-only protection" -ForegroundColor Green
 }
 
-# Step7: Clean temporary files
+# Clean Temp Cache Files
 Remove-Item $TempZip -Force -ErrorAction SilentlyContinue
 Remove-Item $TempUnzip -Recurse -Force -ErrorAction SilentlyContinue
 
-# Step8: Finish and launch Steam
-Write-Host "`n==================== Installation Complete ====================" -ForegroundColor Cyan
-if($allSuccess){
-    Write-Host "✅ All patch files installed successfully!" -ForegroundColor Green
+# Finish & Launch Steam
+Write-Host "`n==================== All Installation Finished ====================" -ForegroundColor Cyan
+if($installComplete){
+    Write-Host "✅ All patch resources installed successfully!" -ForegroundColor Green
 }else{
-    Write-Host "⚠️ Some files missing, please check your patch archive" -ForegroundColor DarkYellow
+    Write-Host "⚠️ Partial resource missing, please check your zip package" -ForegroundColor DarkYellow
 }
 Start-Sleep -Seconds 2
 Start-Process "$SteamRoot\steam.exe"
-Read-Host "Press Enter to close window"
+Read-Host "Press Enter key to close this window"
 exit 0
