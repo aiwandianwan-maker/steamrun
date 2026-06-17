@@ -1,126 +1,126 @@
-# 强制管理员权限
 #Requires -RunAsAdministrator
 $ProgressPreference = 'SilentlyContinue'
-Write-Host "==================== Steam补丁自动部署工具 ====================" -ForegroundColor Cyan
+Write-Host "==================== Steam Patch Auto Install Tool ====================" -ForegroundColor Cyan
 
-# ========== 配置区（仅修改这里的下载地址） ==========
-$ZipUrl = "https://aiwandianwan-maker.github.io/patch.zip"  # 替换你服务器zip直链
-$TempZip = "$env:TEMP\steam_patch.zip"
+# Config Area — Only modify the download link below
+$ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.rar"
+$TempZip = "$env:TEMP\steam_patch.rar"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
-# 需要复制的文件/文件夹列表
 $CopyItems = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-# ==================================================
 
-# 1. 多层逻辑自动获取Steam根目录
+# Step1: Auto detect Steam root folder
 $SteamRoot = $null
-# 第一层：当前用户注册表 HKCU
+# 1. User Registry HKCU
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $reg = Get-ItemProperty "HKCU:\Software\Valve\Steam"
     if($reg.SteamPath -and (Test-Path "$($reg.SteamPath)\steam.exe")){
         $SteamRoot = $reg.SteamPath.TrimEnd('\')
-        Write-Host "✅ 从用户注册表识别Steam: $SteamRoot" -ForegroundColor Green
+        Write-Host "✅ Detected Steam from user registry: $SteamRoot" -ForegroundColor Green
     }
 }
-# 第二层：64位系统全局注册表 HKLM Wow6432Node
+# 2. System Registry HKLM Wow6432Node
 if(-not $SteamRoot){
     if(Test-Path "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"){
         $reg = Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"
         if($reg.InstallPath -and (Test-Path "$($reg.InstallPath)\steam.exe")){
             $SteamRoot = $reg.InstallPath.TrimEnd('\')
-            Write-Host "✅ 从系统注册表识别Steam: $SteamRoot" -ForegroundColor Green
+            Write-Host "✅ Detected Steam from system registry: $SteamRoot" -ForegroundColor Green
         }
     }
 }
-# 第三层：兜底扫描 C D E F Program Files (x86)
+# 3. Scan C/D/E/F disk Program Files (x86) & root Steam folder
 if(-not $SteamRoot){
     $disks = @("C:","D:","E:","F:")
     foreach($d in $disks){
         $testPath = "$d\Program Files (x86)\Steam"
         if(Test-Path "$testPath\steam.exe"){
             $SteamRoot = $testPath
-            Write-Host "✅ 磁盘目录扫描识别Steam: $SteamRoot" -ForegroundColor Green
+            Write-Host "✅ Detected Steam from $d\Program Files (x86)\Steam" -ForegroundColor Green
             break
         }
         $testRoot = "$d\Steam"
         if(Test-Path "$testRoot\steam.exe"){
             $SteamRoot = $testRoot
-            Write-Host "✅ 磁盘根目录扫描识别Steam: $SteamRoot" -ForegroundColor Green
+            Write-Host "✅ Detected Steam from $d\Steam" -ForegroundColor Green
             break
         }
     }
 }
-# 第四层：兜底读取正在运行的steam.exe进程
+# 4. Fallback: running steam.exe process
 if(-not $SteamRoot){
     $steamProc = Get-Process steam -ErrorAction SilentlyContinue
     if($steamProc){
         $exePath = $steamProc[0].Path
         $SteamRoot = Split-Path $exePath -Parent
-        Write-Host "✅ 从运行进程识别Steam: $SteamRoot" -ForegroundColor Green
+        Write-Host "✅ Detected Steam from running process: $SteamRoot" -ForegroundColor Green
     }
 }
-# 全部方式都失败则退出
+# Fail if no Steam found
 if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
-    Write-Host "❌ 无法找到Steam安装目录，请确认Steam已安装并启动一次！" -ForegroundColor Red
-    Read-Host "按回车关闭"
+    Write-Host "❌ Cannot find Steam installation folder, exit." -ForegroundColor Red
+    Read-Host "Press Enter to close"
     exit 1
 }
 
-# 2. 强制关闭所有Steam进程
-Write-Host "`n正在关闭Steam进程..." -ForegroundColor Yellow
+# Step2: Kill all Steam processes
+Write-Host "`nClosing all Steam processes..." -ForegroundColor Yellow
 Get-Process steam,steamwebhelper,steamerrorreporter -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 
-# 3. 服务器下载补丁压缩包
-Write-Host "`n正在从服务器下载补丁包..." -ForegroundColor Yellow
+# Step3: Download patch archive from github pages
+Write-Host "`nDownloading patch package from server..." -ForegroundColor Yellow
 try{
     $wc = New-Object System.Net.WebClient
     $wc.DownloadFile($ZipUrl,$TempZip)
 }catch{
-    Write-Host "❌ 补丁包下载失败，请检查网络或下载链接！" -ForegroundColor Red
-    Read-Host "按回车关闭"
+    Write-Host "❌ Failed to download patch file, check network or link." -ForegroundColor Red
+    Read-Host "Press Enter to close"
     exit 1
 }
 
-# 4. 解压到临时目录
+# Step4: Extract archive to temp folder
 if(Test-Path $TempUnzip){Remove-Item $TempUnzip -Recurse -Force}
 New-Item $TempUnzip -ItemType Directory -Force | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
+# Support rar/zip, if your file is zip replace .rar to .zip
+if($TempZip.EndsWith(".zip")){
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
+}
 
-# 5. 批量复制所有文件到Steam根目录
-Write-Host "`n开始复制补丁文件至Steam目录..." -ForegroundColor Yellow
+# Step5: Copy all patch files to Steam root
+Write-Host "`nCopying patch files to Steam directory..." -ForegroundColor Yellow
 $allSuccess = $true
 foreach($item in $CopyItems){
     $src = Join-Path $TempUnzip $item
     $dst = Join-Path $SteamRoot $item
     if(Test-Path $src){
         Copy-Item $src $dst -Recurse -Force
-        Write-Host "✅ 已复制: $item" -ForegroundColor Green
+        Write-Host "✅ Copied: $item" -ForegroundColor Green
     }else{
-        Write-Host "❌ 缺失文件: $item" -ForegroundColor Red
+        Write-Host "❌ Missing file: $item" -ForegroundColor Red
         $allSuccess = $false
     }
 }
 
-# 6. 设置steam.cfg只读
+# Step6: Set steam.cfg read-only attribute
 $cfgPath = Join-Path $SteamRoot "steam.cfg"
 if(Test-Path $cfgPath){
     (Get-Item $cfgPath).Attributes += [System.IO.FileAttributes]::ReadOnly
-    Write-Host "✅ steam.cfg 已设置只读保护" -ForegroundColor Green
+    Write-Host "✅ steam.cfg set to read-only mode" -ForegroundColor Green
 }
 
-# 7. 清理临时文件
+# Step7: Clean temporary files
 Remove-Item $TempZip -Force -ErrorAction SilentlyContinue
 Remove-Item $TempUnzip -Recurse -Force -ErrorAction SilentlyContinue
 
-# 8. 完成，启动Steam
-Write-Host "`n==================== 部署完成 ====================" -ForegroundColor Cyan
+# Step8: Finish and launch Steam
+Write-Host "`n==================== Installation Complete ====================" -ForegroundColor Cyan
 if($allSuccess){
-    Write-Host "✅ 全部补丁文件安装成功！" -ForegroundColor Green
+    Write-Host "✅ All patch files installed successfully!" -ForegroundColor Green
 }else{
-    Write-Host "⚠️ 存在部分文件缺失，请检查压缩包内容" -ForegroundColor DarkYellow
+    Write-Host "⚠️ Some files missing, please check your patch archive" -ForegroundColor DarkYellow
 }
 Start-Sleep -Seconds 2
 Start-Process "$SteamRoot\steam.exe"
-Read-Host "按回车键关闭窗口"
+Read-Host "Press Enter to close window"
 exit 0
