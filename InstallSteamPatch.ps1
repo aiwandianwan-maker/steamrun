@@ -4,7 +4,7 @@ $ProgressPreference = 'SilentlyContinue'
 Write-Host "==================== Steam补丁自动部署工具 ====================" -ForegroundColor Cyan
 
 # ========== 配置区（仅修改这里的下载地址） ==========
-$ZipUrl = "https://xxx.com/patch.zip"  # 替换你服务器zip直链
+$ZipUrl = "https://aiwandianwan-maker.github.io/patch.zip"  # 替换你服务器zip直链
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 # 需要复制的文件/文件夹列表
