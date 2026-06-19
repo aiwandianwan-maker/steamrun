@@ -99,39 +99,26 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 新流程：启动Steam + 后台弹出激活框 + 5秒自动关窗 ==========
+# ========== 修复版：快速弹窗 + 网络请求加固 ==========
 # 1. 立即启动Steam
 Start-Process "$SteamRoot\steam.exe"
 
-# 2. 生成独立的激活验证后台脚本（Steam风格深色窗口）
+# 2. 生成独立激活窗口脚本（修复网络 + 快速弹出 + 窗口置顶）
 $activatorScriptPath = "$env:TEMP\steam_activator.ps1"
 $activatorCode = @"
-`$ErrorActionPreference = 'Continue'
+`$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# 网络配置
-try {
-    `$AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
-    [System.Net.ServicePointManager]::SecurityProtocol = `$AllProtocols
-} catch {
-    [System.Net.ServicePointManager]::SecurityProtocol = 3072
-}
-[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {`$true}
+# ========== 修复：网络请求强兼容配置 ==========
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]{`$true}
+[System.Net.ServicePointManager]::Expect100Continue = `$false
 
-# 等待Steam启动完成
-`$waitCount = 0
-while (`$waitCount -lt 30) {
-    `$proc = Get-Process steam -ErrorAction SilentlyContinue
-    if (`$proc -and `$proc.MainWindowHandle -ne 0) {
-        Start-Sleep -Seconds 2
-        break
-    }
-    Start-Sleep -Seconds 1
-    `$waitCount++
-}
+# 仅等待3秒就弹窗，不用等Steam完全加载
+Start-Sleep -Seconds 3
 
-# ========== Steam风格深色激活窗口 ==========
+# ========== Steam风格深色激活窗口（置顶显示） ==========
 `$form = New-Object System.Windows.Forms.Form
 `$form.Text = "  输入您的激活码"
 `$form.Size = New-Object System.Drawing.Size(680,420)
@@ -142,6 +129,7 @@ while (`$waitCount -lt 30) {
 `$form.MaximizeBox = `$false
 `$form.MinimizeBox = `$false
 `$form.Font = New-Object System.Drawing.Font("Microsoft YaHei UI",10)
+`$form.TopMost = `$true  # 窗口置顶，不会被Steam挡住
 
 # 标题
 `$lblTitle = New-Object System.Windows.Forms.Label
@@ -235,8 +223,23 @@ if (`$result -eq [System.Windows.Forms.DialogResult]::OK) {
     }
     
     try {
-        `$postBody = @{ key = `$key }
-        `$response = Invoke-RestMethod -Uri "$ApiUrl" -Method Post -Body `$postBody -ErrorAction Stop
+        # 修复：POST请求参数编码，确保接口能正常接收
+        `$postData = "key=" + [System.Uri]::EscapeDataString(`$key)
+        `$webReq = [System.Net.WebRequest]::Create("$ApiUrl")
+        `$webReq.Method = "POST"
+        `$webReq.ContentType = "application/x-www-form-urlencoded"
+        `$webReq.Timeout = 10000
+        `$bytes = [System.Text.Encoding]::UTF8.GetBytes(`$postData)
+        `$webReq.ContentLength = `$bytes.Length
+        `$reqStream = `$webReq.GetRequestStream()
+        `$reqStream.Write(`$bytes, 0, `$bytes.Length)
+        `$reqStream.Close()
+        
+        `$resp = `$webReq.GetResponse()
+        `$respStream = `$resp.GetResponseStream()
+        `$reader = New-Object System.IO.StreamReader(`$respStream)
+        `$responseJson = `$reader.ReadToEnd()
+        `$response = `$responseJson | ConvertFrom-Json
         
         if (`$response.code -eq 1) {
             `$msg = "激活成功！`r`n对应游戏：`$(`$response.data.game_name)`r`n补丁文件：`$(`$response.data.lua_filename)`r`n授权已生效。"
@@ -245,16 +248,17 @@ if (`$result -eq [System.Windows.Forms.DialogResult]::OK) {
             [System.Windows.Forms.MessageBox]::Show("激活失败：`r`n`$(`$response.msg)","激活失败","OK","Error")
         }
     } catch {
-        [System.Windows.Forms.MessageBox]::Show("连接验证服务器失败，请检查网络。","网络错误","OK","Error")
+        `$errMsg = `$_.Exception.Message
+        [System.Windows.Forms.MessageBox]::Show("连接验证服务器失败，请检查网络。`r`n错误详情：`$errMsg","网络错误","OK","Error")
     }
 }
 "@
 
-# 写入临时脚本并后台独立启动（不随主窗口关闭）
+# 写入临时脚本并后台独立启动
 $activatorCode | Out-File $activatorScriptPath -Encoding utf8
 Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$activatorScriptPath`"" -WindowStyle Hidden
 
-# 3. 主窗口倒计时5秒后自动关闭
-Write-Host "窗口将在5秒后自动关闭，Steam启动后将弹出激活窗口..." -ForegroundColor Gray
+# 3. 主窗口5秒后自动关闭
+Write-Host "窗口将在5秒后自动关闭，激活窗口即将弹出..." -ForegroundColor Gray
 Start-Sleep -Seconds 5
 exit 0
