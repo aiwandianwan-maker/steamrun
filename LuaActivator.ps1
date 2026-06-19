@@ -1,28 +1,22 @@
-﻿# 激活码验证独立程序
+# 激活码验证独立程序
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# 全局证书忽略 + TLS全兼容
-Add-Type @"
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-public class TrustAllCertsPolicy : ICertificatePolicy {
-    public bool CheckValidationResult(
-        ServicePoint srvPoint, X509Certificate certificate,
-        WebRequest request, int certificateProblem) {
-        return true;
-    }
-}
-"@
-[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
-[Net.ServicePointManager]::Expect100Continue = $false
+# ========== 核心修复：兼容PowerShell 5.1的证书忽略 + 全协议支持 ==========
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
+[System.Net.ServicePointManager]::Expect100Continue = $false
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
 $ApiUrl = "https://api.awsteam.icu/api.php"
 $defFont = New-Object System.Drawing.Font("Microsoft YaHei", 10)
 $titleFont = New-Object System.Drawing.Font("Microsoft YaHei", 18, [System.Drawing.FontStyle]::Bold)
 $codeFont = New-Object System.Drawing.Font("Consolas", 12)
+
+# 模拟浏览器请求头，避免被服务器拦截
+$reqHeaders = @{
+    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+}
 
 # 主窗口
 $form = New-Object System.Windows.Forms.Form
@@ -130,7 +124,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
     
     try {
         $body = @{ key = $key }
-        $response = Invoke-WebRequest -Uri $ApiUrl -Method Post -Body $body -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+        $response = Invoke-WebRequest -Uri $ApiUrl -Method Post -Body $body -Headers $reqHeaders -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
         $data = $response.Content | ConvertFrom-Json
         
         if ($data.code -eq 1) {
