@@ -1,88 +1,144 @@
-# ============== 配置区 ==============
-$apiUrl = "https://api.awsteam.icu/api.php"
-$luaDownloadBase = "https://awsteam.icu/lua/"
-# ===================================
+#Requires -RunAsAdministrator
+$ProgressPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'SilentlyContinue'
 
-# 网络基础配置：强制TLS1.2 + 忽略证书
+# 配置区，无需改动
+$ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.zip"
+$TempZip = "$env:TEMP\steam_patch.zip"
+$TempUnzip = "$env:TEMP\steam_patch_temp"
+$CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
+
+# 自动查找Steam路径
+$SteamRoot = $null
+# 读取用户注册表
+if(Test-Path "HKCU:\Software\Valve\Steam"){
+    $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
+    if($regInfo.SteamPath -and (Test-Path "$($regInfo.SteamPath)\steam.exe")){
+        $SteamRoot = $regInfo.SteamPath.TrimEnd('\')
+    }
+}
+# 读取系统注册表
+if(-not $SteamRoot){
+    if(Test-Path "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"){
+        $regInfo = Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"
+        if($regInfo.InstallPath -and (Test-Path "$($regInfo.InstallPath)\steam.exe")){
+            $SteamRoot = $regInfo.InstallPath.TrimEnd('\')
+        }
+    }
+}
+# 扫描C/D/E/F盘Steam目录
+if(-not $SteamRoot){
+    $diskArr = @("C:","D:","E:","F:")
+    foreach($disk in $diskArr){
+        $path1 = "$disk\Program Files (x86)\Steam"
+        if(Test-Path "$path1\steam.exe"){
+            $SteamRoot = $path1
+            break
+        }
+        $path2 = "$disk\Steam"
+        if(Test-Path "$path2\steam.exe"){
+            $SteamRoot = $path2
+            break
+        }
+    }
+}
+# 从运行中的Steam进程识别
+if(-not $SteamRoot){
+    $steamProc = Get-Process steam
+    if($steamProc){
+        $exePath = $steamProc[0].Path
+        $SteamRoot = Split-Path $exePath -Parent
+    }
+}
+# 未找到Steam，直接报错退出
+if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
+    Write-Host "`n❌ ERROR: Cannot locate Steam folder" -ForegroundColor Red
+    Read-Host "Press Enter to close"
+    exit 1
+}
+
+# 静默关闭所有Steam进程
+Get-Process steam,steamwebhelper,steamerrorreporter | Stop-Process -Force
+Start-Sleep -Seconds 2
+
+# 静默下载补丁包
+try{
+    $webClient = New-Object System.Net.WebClient
+    $webClient.DownloadFile($ZipUrl,$TempZip)
+}catch{
+    Write-Host "`n❌ ERROR: Patch download failed" -ForegroundColor Red
+    Read-Host "Press Enter to close"
+    exit 1
+}
+
+# 解压文件
+if(Test-Path $TempUnzip){Remove-Item $TempUnzip -Recurse -Force}
+New-Item $TempUnzip -ItemType Directory -Force | Out-Null
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
+
+# 静默批量复制，无逐条打印
+$installComplete = $true
+foreach($file in $CopyList){
+    $source = Join-Path $TempUnzip $file
+    $dest = Join-Path $SteamRoot $file
+    if(Test-Path $source){
+        Copy-Item $source $dest -Recurse -Force
+    }else{
+        $installComplete = $false
+    }
+}
+
+# 锁定cfg只读
+$cfgFullPath = Join-Path $SteamRoot "steam.cfg"
+if(Test-Path $cfgFullPath){
+    (Get-Item $cfgFullPath).Attributes += [System.IO.FileAttributes]::ReadOnly
+}
+
+# 清理临时文件
+Remove-Item $TempZip -Force
+Remove-Item $TempUnzip -Recurse -Force
+
+# 仅输出最终结果（唯一可见输出）
+Write-Host "`n=====================================" -ForegroundColor Cyan
+if($installComplete){
+    Write-Host "✅ SUCCESS: All patches installed" -ForegroundColor Green
+}else{
+    Write-Host "⚠️ WARNING: Some patch files missing" -ForegroundColor DarkYellow
+}
+Write-Host "=====================================`n" -ForegroundColor Cyan
+
+# ========== 新增：安装完成后弹出激活码验证 ==========
+# HTTPS网络兼容配置
 try {
     $AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
     [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
 } catch {
     [System.Net.ServicePointManager]::SecurityProtocol = 3072
 }
-[System.Net.ServicePointManager]::ServerCertificateValidationCallback={$true}
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
-# ========== 第一步：自动安装所有补丁 ==========
-# 获取Steam安装目录
-$steamPaths = @(
-    "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam",
-    "HKLM:\SOFTWARE\Valve\Steam"
-)
-$steamPath = $null
-foreach ($p in $steamPaths) {
-    if (Test-Path $p) {
-        $steamPath = (Get-ItemProperty $p).InstallPath
-        break
-    }
-}
-if (-not $steamPath) {
-    $steamPath = "$env:ProgramFiles (x86)\Steam"
-}
-$commonPath = Join-Path (Join-Path $steamPath "steamapps") "common"
-
-# 补丁-游戏目录对应表，新增补丁在此处补充
-$patchMap = @{
-    "2947440.lua" = "Silent Hill f"
-    "3764200.lua" = "Resident Evil 9"
-}
-
-# 批量下载安装所有补丁
-foreach ($luaFile in $patchMap.Keys) {
-    $gameDir = Join-Path $commonPath $patchMap[$luaFile]
-    if (-not (Test-Path $gameDir)) {
-        New-Item -ItemType Directory -Path $gameDir -Force | Out-Null
-    }
-    $savePath = Join-Path $gameDir $luaFile
-    try {
-        Invoke-WebRequest -Uri ($luaDownloadBase + $luaFile) -OutFile $savePath -ErrorAction Stop
-    } catch {
-        # 单个补丁下载失败不中断整体流程
-        Write-Host "警告：$luaFile 安装失败" -ForegroundColor Yellow
-    }
-}
-
-# 安装成功提示（和原样式完全一致）
-Write-Host ""
-Write-Host "==============================" -ForegroundColor Cyan
-Write-Host "SUCCESS: All patches installed" -ForegroundColor Green
-Write-Host "==============================" -ForegroundColor Cyan
-Write-Host ""
-
-# ========== 第二步：安装完成后弹出激活码验证 ==========
 Add-Type -AssemblyName Microsoft.VisualBasic
-$inputKey = [Microsoft.VisualBasic.Interaction]::InputBox("请输入您的激活码完成授权绑定", "激活码授权", "")
+$inputKey = [Microsoft.VisualBasic.Interaction]::InputBox("请输入激活码完成授权绑定", "激活码验证", "")
 
-if ([string]::IsNullOrWhiteSpace($inputKey)) {
-    Write-Host "未输入激活码，授权流程结束。" -ForegroundColor Yellow
-    $null = [Microsoft.VisualBasic.Interaction]::MsgBox("未输入激活码，授权流程结束。`n补丁已安装，激活后可正常使用。", "OKOnly", "提示")
-} else {
-    # 调用后端接口校验激活码
+if (-not [string]::IsNullOrWhiteSpace($inputKey)) {
     try {
         $postBody = @{ key = $inputKey.Trim() }
-        $response = Invoke-RestMethod -Uri $apiUrl -Method Post -Body $postBody -ErrorAction Stop
+        $response = Invoke-RestMethod -Uri "https://api.awsteam.icu/api.php" -Method Post -Body $postBody -ErrorAction Stop
+        if ($response.code -eq 1) {
+            $gameName = $response.data.game_name
+            $luaFile = $response.data.lua_filename
+            [Microsoft.VisualBasic.Interaction]::MsgBox("激活成功！`n对应游戏：$gameName`n补丁文件：$luaFile`n授权已生效。", "OKOnly", "激活成功")
+        } else {
+            [Microsoft.VisualBasic.Interaction]::MsgBox("激活失败：`n$($response.msg)", "OKOnly", "激活失败")
+        }
     } catch {
-        Write-Host "连接验证服务器失败，请检查网络。" -ForegroundColor Red
-        $null = [Microsoft.VisualBasic.Interaction]::MsgBox("连接验证服务器失败，请检查网络后重试。", "OKOnly", "网络错误")
-        exit
-    }
-
-    if ($response.code -eq 1) {
-        $luaName = $response.data.lua_filename
-        $gameName = $response.data.game_name
-        Write-Host "激活成功！已绑定对应补丁：$luaName" -ForegroundColor Green
-        $null = [Microsoft.VisualBasic.Interaction]::MsgBox("激活成功！`n对应游戏：$gameName`n补丁文件：$luaName`n授权已生效。", "OKOnly", "激活成功")
-    } else {
-        Write-Host "激活失败：$($response.msg)" -ForegroundColor Red
-        $null = [Microsoft.VisualBasic.Interaction]::MsgBox("激活失败：`n$($response.msg)", "OKOnly", "激活失败")
+        [Microsoft.VisualBasic.Interaction]::MsgBox("连接验证服务器失败，请检查网络后重试。", "OKOnly", "网络错误")
     }
 }
+
+# 启动Steam，等待回车关闭
+Start-Sleep -Seconds 2
+Start-Process "$SteamRoot\steam.exe"
+Read-Host "Press Enter to close window"
+exit 0
