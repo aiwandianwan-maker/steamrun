@@ -100,7 +100,7 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 安装激活程序 + 桌面生成BAT启动文件 ==========
+# ========== 安装激活程序 + 桌面生成启动文件 ==========
 # 创建本地安装目录
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
@@ -113,27 +113,29 @@ try{
     Write-Host "警告：激活程序下载失败" -ForegroundColor Yellow
 }
 
-# 在桌面生成BAT启动文件（替代LNK快捷方式，降低误报率）
+# 在桌面生成「游戏激活程序.bat」启动文件
 $desktopPath = [Environment]::GetFolderPath("Desktop")
-$batPath = Join-Path $desktopPath "补丁激活工具.bat"
+$batPath = Join-Path $desktopPath "游戏激活程序.bat"
 $batContent = @"
 @echo off
 chcp 65001 >nul
-powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "%ProgramFiles%\SteamPatch\Activator.ps1"
+start "" powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\Activator.ps1"
 exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
 
-# ========== 启动Steam + 弹出激活窗口 + 5秒自动关闭 ==========
+# ========== 启动Steam + 调用桌面bat弹出激活窗口 + 5秒自动关闭 ==========
 # 启动Steam
 Start-Process "$SteamRoot\steam.exe"
 
-# 延迟3秒弹出激活窗口
+# 延迟3秒后，直接调用桌面bat文件启动激活窗口（和手动双击效果一致，更稳定）
 Start-Sleep -Seconds 3
-Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File ""$InstallDir\Activator.ps1""" -WindowStyle Hidden
+if (Test-Path $batPath) {
+    Start-Process $batPath
+}
 
 # 主窗口5秒后自动关闭
 Write-Host "窗口将在5秒后自动关闭，激活窗口即将弹出..." -ForegroundColor Gray
-Write-Host "桌面已生成「补丁激活工具.bat」，后续双击即可打开激活" -ForegroundColor Gray
+Write-Host "桌面已生成「游戏激活程序」，后续双击即可重新激活" -ForegroundColor Gray
 Start-Sleep -Seconds 5
 exit 0
