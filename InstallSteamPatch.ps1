@@ -2,7 +2,7 @@
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ========== 核心修复1：全局TLS兼容 + 证书忽略，确保能正常下载Github文件 ==========
+# ========== 全局TLS兼容 + 证书忽略，确保Github文件下载正常 ==========
 try {
     Add-Type @"
 using System.Net;
@@ -29,7 +29,7 @@ $InstallDir = "C:\Program Files\SteamPatch"
 $ActivatorFileName = "LuaActivator.ps1"
 # ============================
 
-# ===== 以下安装逻辑完全不动 =====
+# ===== 补丁安装逻辑 完全保留 =====
 $SteamRoot = $null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
@@ -118,21 +118,19 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 核心修复2：安装激活程序 + 校验下载结果 ==========
-# 创建本地安装目录
+# ========== 安装激活程序 ==========
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
 }
 
 $activatorFullPath = Join-Path $InstallDir $ActivatorFileName
 
-# 下载激活脚本，失败重试一次
+# 下载激活脚本，失败重试
 $downloadSuccess = $false
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorFullPath)
     if (Test-Path $activatorFullPath) { $downloadSuccess = $true }
 } catch {
-    # 重试一次
     try {
         Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorFullPath -UseBasicParsing -ErrorAction Stop
         if (Test-Path $activatorFullPath) { $downloadSuccess = $true }
@@ -141,38 +139,34 @@ try {
 
 if (-not $downloadSuccess) {
     Write-Host "⚠️ 警告：激活程序下载失败，请手动从官网获取" -ForegroundColor Yellow
+} else {
+    Write-Host "✅ 激活程序已安装至：$activatorFullPath" -ForegroundColor Green
 }
 
-# ========== 核心修复3：桌面生成「游戏激活程序.bat」，修复路径空格问题 ==========
+# ========== 生成桌面启动bat ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $batPath = Join-Path $desktopPath "游戏激活程序.bat"
 $batContent = @"
 @echo off
 chcp 65001 >nul
-start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\LuaActivator.ps1"
+cd /d "C:\Program Files\SteamPatch"
+start "" powershell.exe -NoExit -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\LuaActivator.ps1"
 exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
+Write-Host "✅ 桌面已生成启动工具：游戏激活程序.bat" -ForegroundColor Green
 
-# ========== 核心修复4：自动弹出激活窗口，数组传参彻底解决空格路径问题 ==========
-# 启动Steam
+# ========== 启动Steam + 自动弹出激活窗口 ==========
 Start-Process "$SteamRoot\steam.exe"
+Write-Host "`n🚀 Steam已启动，3秒后弹出激活窗口..." -ForegroundColor Gray
 
-# 延迟3秒后弹出激活窗口
 Start-Sleep -Seconds 3
 if (Test-Path $activatorFullPath) {
-    # 用数组传参，避免空格和引号转义问题
-    $argList = @(
-        "-WindowStyle", "Hidden",
-        "-ExecutionPolicy", "Bypass",
-        "-File", $activatorFullPath
-    )
-    Start-Process powershell.exe -ArgumentList $argList
+    # 暂时保留PowerShell窗口，确保启动成功，后续可改为隐藏模式
+    Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy Bypass", "-File", "`"$activatorFullPath`""
 }
 
 # 主窗口5秒后自动关闭
-Write-Host "窗口将在5秒后自动关闭，激活窗口即将弹出..." -ForegroundColor Gray
-Write-Host "桌面已生成「游戏激活程序」，后续双击即可重新激活" -ForegroundColor Gray
-Write-Host "激活程序安装位置：$InstallDir" -ForegroundColor Gray
+Write-Host "⏱️  主窗口将在5秒后自动关闭" -ForegroundColor Gray
 Start-Sleep -Seconds 5
 exit 0
