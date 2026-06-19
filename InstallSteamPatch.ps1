@@ -100,7 +100,7 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 新增：安装激活程序 + 创建桌面快捷方式 ==========
+# ========== 安装激活程序 + 桌面生成BAT启动文件 ==========
 # 创建本地安装目录
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
@@ -113,16 +113,16 @@ try{
     Write-Host "警告：激活程序下载失败" -ForegroundColor Yellow
 }
 
-# 创建桌面快捷方式
+# 在桌面生成BAT启动文件（替代LNK快捷方式，降低误报率）
 $desktopPath = [Environment]::GetFolderPath("Desktop")
-$shortcutPath = Join-Path $desktopPath "补丁激活工具.lnk"
-$WshShell = New-Object -ComObject WScript.Shell
-$shortcut = $WshShell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = "powershell.exe"
-$shortcut.Arguments = "-WindowStyle Hidden -ExecutionPolicy Bypass -File ""$InstallDir\Activator.ps1"""
-$shortcut.WorkingDirectory = $InstallDir
-$shortcut.Description = "Steam补丁激活码验证工具"
-$shortcut.Save()
+$batPath = Join-Path $desktopPath "补丁激活工具.bat"
+$batContent = @"
+@echo off
+chcp 65001 >nul
+powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "%ProgramFiles%\SteamPatch\Activator.ps1"
+exit
+"@
+$batContent | Out-File $batPath -Encoding Default -Force
 
 # ========== 启动Steam + 弹出激活窗口 + 5秒自动关闭 ==========
 # 启动Steam
@@ -134,6 +134,6 @@ Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Byp
 
 # 主窗口5秒后自动关闭
 Write-Host "窗口将在5秒后自动关闭，激活窗口即将弹出..." -ForegroundColor Gray
-Write-Host "桌面已创建「补丁激活工具」快捷方式，后续可直接双击打开" -ForegroundColor Gray
+Write-Host "桌面已生成「补丁激活工具.bat」，后续双击即可打开激活" -ForegroundColor Gray
 Start-Sleep -Seconds 5
 exit 0
