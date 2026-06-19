@@ -2,13 +2,31 @@
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
+# ========== 核心修复1：全局TLS兼容 + 证书忽略，确保能正常下载Github文件 ==========
+try {
+    Add-Type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class TrustAllCertsPolicy : ICertificatePolicy {
+    public bool CheckValidationResult(
+        ServicePoint srvPoint, X509Certificate certificate,
+        WebRequest request, int certificateProblem) {
+        return true;
+    }
+}
+"@
+    [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
+} catch {}
+
 # ========== 配置区 ==========
 $ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.zip"
-$ActivatorUrl = "https://aiwandianwan-maker.github.io/steamrun/Activator.ps1"
+$ActivatorUrl = "https://aiwandianwan-maker.github.io/steamrun/LuaActivator.ps1"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
 $InstallDir = "C:\Program Files\SteamPatch"
+$ActivatorFileName = "LuaActivator.ps1"
 # ============================
 
 # ===== 以下安装逻辑完全不动 =====
@@ -100,42 +118,61 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 安装激活程序 + 桌面生成启动文件 ==========
+# ========== 核心修复2：安装激活程序 + 校验下载结果 ==========
 # 创建本地安装目录
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
 }
 
-# 下载激活程序到本地
-try{
-    $webClient.DownloadFile($ActivatorUrl, "$InstallDir\Activator.ps1")
-}catch{
-    Write-Host "警告：激活程序下载失败" -ForegroundColor Yellow
+$activatorFullPath = Join-Path $InstallDir $ActivatorFileName
+
+# 下载激活脚本，失败重试一次
+$downloadSuccess = $false
+try {
+    $webClient.DownloadFile($ActivatorUrl, $activatorFullPath)
+    if (Test-Path $activatorFullPath) { $downloadSuccess = $true }
+} catch {
+    # 重试一次
+    try {
+        Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorFullPath -UseBasicParsing -ErrorAction Stop
+        if (Test-Path $activatorFullPath) { $downloadSuccess = $true }
+    } catch {}
 }
 
-# 在桌面生成「游戏激活程序.bat」启动文件
+if (-not $downloadSuccess) {
+    Write-Host "⚠️ 警告：激活程序下载失败，请手动从官网获取" -ForegroundColor Yellow
+}
+
+# ========== 核心修复3：桌面生成「游戏激活程序.bat」，修复路径空格问题 ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $batPath = Join-Path $desktopPath "游戏激活程序.bat"
 $batContent = @"
 @echo off
 chcp 65001 >nul
-start "" powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\Activator.ps1"
+start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\LuaActivator.ps1"
 exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
 
-# ========== 启动Steam + 调用桌面bat弹出激活窗口 + 5秒自动关闭 ==========
+# ========== 核心修复4：自动弹出激活窗口，数组传参彻底解决空格路径问题 ==========
 # 启动Steam
 Start-Process "$SteamRoot\steam.exe"
 
-# 延迟3秒后，直接调用桌面bat文件启动激活窗口（和手动双击效果一致，更稳定）
+# 延迟3秒后弹出激活窗口
 Start-Sleep -Seconds 3
-if (Test-Path $batPath) {
-    Start-Process $batPath
+if (Test-Path $activatorFullPath) {
+    # 用数组传参，避免空格和引号转义问题
+    $argList = @(
+        "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $activatorFullPath
+    )
+    Start-Process powershell.exe -ArgumentList $argList
 }
 
 # 主窗口5秒后自动关闭
 Write-Host "窗口将在5秒后自动关闭，激活窗口即将弹出..." -ForegroundColor Gray
 Write-Host "桌面已生成「游戏激活程序」，后续双击即可重新激活" -ForegroundColor Gray
+Write-Host "激活程序安装位置：$InstallDir" -ForegroundColor Gray
 Start-Sleep -Seconds 5
 exit 0
