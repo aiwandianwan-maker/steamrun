@@ -1,19 +1,31 @@
-# 激活码验证独立程序
-$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+﻿# 激活码验证独立程序
+try {
+    $ErrorActionPreference = 'Stop'
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+} catch {
+    exit
+}
 
-# ========== 核心修复：兼容PowerShell 5.1的证书忽略 + 全协议支持 ==========
+# 网络配置
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
 [System.Net.ServicePointManager]::Expect100Continue = $false
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
 $ApiUrl = "https://api.awsteam.icu/api.php"
-$defFont = New-Object System.Drawing.Font("Microsoft YaHei", 10)
-$titleFont = New-Object System.Drawing.Font("Microsoft YaHei", 18, [System.Drawing.FontStyle]::Bold)
-$codeFont = New-Object System.Drawing.Font("Consolas", 12)
 
-# 模拟浏览器请求头，避免被服务器拦截
+# 字体容错：优先雅黑，不存在则用系统默认字体
+try {
+    $defFont = New-Object System.Drawing.Font("Microsoft YaHei", 10)
+    $titleFont = New-Object System.Drawing.Font("Microsoft YaHei", 18, [System.Drawing.FontStyle]::Bold)
+    $codeFont = New-Object System.Drawing.Font("Consolas", 12)
+} catch {
+    $defFont = [System.Drawing.SystemFonts]::DefaultFont
+    $titleFont = New-Object System.Drawing.Font($defFont.FontFamily, 18, [System.Drawing.FontStyle]::Bold)
+    $codeFont = [System.Drawing.SystemFonts]::DefaultFont
+}
+
+# 浏览器UA，避免被服务器拦截
 $reqHeaders = @{
     "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 }
@@ -55,7 +67,7 @@ $lblDemo.Text = "激活码格式示例"
 $lblDemo.Location = New-Object System.Drawing.Point(32, 155)
 $lblDemo.Size = New-Object System.Drawing.Size(200, 25)
 $lblDemo.ForeColor = [System.Drawing.Color]::FromArgb(200, 208, 220)
-$lblDemo.Font = New-Object System.Drawing.Font("Microsoft YaHei", 9, [System.Drawing.FontStyle]::Bold)
+$lblDemo.Font = New-Object System.Drawing.Font($defFont.FontFamily, 9, [System.Drawing.FontStyle]::Bold)
 $form.Controls.Add($lblDemo)
 
 $lblDemo2 = New-Object System.Windows.Forms.Label
