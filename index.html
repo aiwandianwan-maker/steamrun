@@ -99,26 +99,39 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 修复版：快速弹窗 + 网络请求加固 ==========
+# ========== 修复版：彻底解决HTTPS连接报错 + 3秒快速弹窗 ==========
 # 1. 立即启动Steam
 Start-Process "$SteamRoot\steam.exe"
 
-# 2. 生成独立激活窗口脚本（修复网络 + 快速弹出 + 窗口置顶）
+# 2. 生成独立激活窗口脚本（稳定网络请求版）
 $activatorScriptPath = "$env:TEMP\steam_activator.ps1"
 $activatorCode = @"
 `$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# ========== 修复：网络请求强兼容配置 ==========
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [System.Net.Security.RemoteCertificateValidationCallback]{`$true}
-[System.Net.ServicePointManager]::Expect100Continue = `$false
+# ========== 核心修复1：内嵌C#类全局忽略证书，子进程100%生效 ==========
+Add-Type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class TrustAllCertsPolicy : ICertificatePolicy {
+    public bool CheckValidationResult(
+        ServicePoint srvPoint, X509Certificate certificate,
+        WebRequest request, int certificateProblem) {
+        return true;
+    }
+}
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-# 仅等待3秒就弹窗，不用等Steam完全加载
+# ========== 核心修复2：启用所有TLS协议，全版本兼容 ==========
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+[Net.ServicePointManager]::Expect100Continue = `$false
+
+# 3秒快速弹窗，无需等待Steam完全加载
 Start-Sleep -Seconds 3
 
-# ========== Steam风格深色激活窗口（置顶显示） ==========
+# ========== Steam风格深色激活窗口（置顶） ==========
 `$form = New-Object System.Windows.Forms.Form
 `$form.Text = "  输入您的激活码"
 `$form.Size = New-Object System.Drawing.Size(680,420)
@@ -129,7 +142,7 @@ Start-Sleep -Seconds 3
 `$form.MaximizeBox = `$false
 `$form.MinimizeBox = `$false
 `$form.Font = New-Object System.Drawing.Font("Microsoft YaHei UI",10)
-`$form.TopMost = `$true  # 窗口置顶，不会被Steam挡住
+`$form.TopMost = `$true
 
 # 标题
 `$lblTitle = New-Object System.Windows.Forms.Label
@@ -223,33 +236,20 @@ if (`$result -eq [System.Windows.Forms.DialogResult]::OK) {
     }
     
     try {
-        # 修复：POST请求参数编码，确保接口能正常接收
-        `$postData = "key=" + [System.Uri]::EscapeDataString(`$key)
-        `$webReq = [System.Net.WebRequest]::Create("$ApiUrl")
-        `$webReq.Method = "POST"
-        `$webReq.ContentType = "application/x-www-form-urlencoded"
-        `$webReq.Timeout = 10000
-        `$bytes = [System.Text.Encoding]::UTF8.GetBytes(`$postData)
-        `$webReq.ContentLength = `$bytes.Length
-        `$reqStream = `$webReq.GetRequestStream()
-        `$reqStream.Write(`$bytes, 0, `$bytes.Length)
-        `$reqStream.Close()
+        # 发送POST请求校验
+        `$body = @{ key = `$key }
+        `$response = Invoke-WebRequest -Uri "$ApiUrl" -Method Post -Body `$body -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+        `$data = `$response.Content | ConvertFrom-Json
         
-        `$resp = `$webReq.GetResponse()
-        `$respStream = `$resp.GetResponseStream()
-        `$reader = New-Object System.IO.StreamReader(`$respStream)
-        `$responseJson = `$reader.ReadToEnd()
-        `$response = `$responseJson | ConvertFrom-Json
-        
-        if (`$response.code -eq 1) {
-            `$msg = "激活成功！`r`n对应游戏：`$(`$response.data.game_name)`r`n补丁文件：`$(`$response.data.lua_filename)`r`n授权已生效。"
+        if (`$data.code -eq 1) {
+            `$msg = "激活成功！`r`n对应游戏：`$(`$data.data.game_name)`r`n补丁文件：`$(`$data.data.lua_filename)`r`n授权已生效。"
             [System.Windows.Forms.MessageBox]::Show(`$msg,"激活成功","OK","Information")
         } else {
-            [System.Windows.Forms.MessageBox]::Show("激活失败：`r`n`$(`$response.msg)","激活失败","OK","Error")
+            [System.Windows.Forms.MessageBox]::Show("激活失败：`r`n`$(`$data.msg)","激活失败","OK","Error")
         }
     } catch {
-        `$errMsg = `$_.Exception.Message
-        [System.Windows.Forms.MessageBox]::Show("连接验证服务器失败，请检查网络。`r`n错误详情：`$errMsg","网络错误","OK","Error")
+        `$err = `$_.Exception.Message
+        [System.Windows.Forms.MessageBox]::Show("连接验证服务器失败，请检查网络。`r`n错误：`$err","网络错误","OK","Error")
     }
 }
 "@
