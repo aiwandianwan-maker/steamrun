@@ -4,10 +4,11 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.zip"
+$ActivatorUrl = "https://aiwandianwan-maker.github.io/steamrun/Activator.ps1"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-$ApiUrl = "https://api.awsteam.icu/api.php"
+$InstallDir = "C:\Program Files\SteamPatch"
 # ============================
 
 # ===== 以下安装逻辑完全不动 =====
@@ -99,166 +100,40 @@ if($installComplete){
 Write-Host "=====================================`n" -ForegroundColor Cyan
 # ===== 安装逻辑结束 =====
 
-# ========== 修复版：彻底解决HTTPS连接报错 + 3秒快速弹窗 ==========
-# 1. 立即启动Steam
+# ========== 新增：安装激活程序 + 创建桌面快捷方式 ==========
+# 创建本地安装目录
+if(-not (Test-Path $InstallDir)){
+    New-Item $InstallDir -ItemType Directory -Force | Out-Null
+}
+
+# 下载激活程序到本地
+try{
+    $webClient.DownloadFile($ActivatorUrl, "$InstallDir\Activator.ps1")
+}catch{
+    Write-Host "警告：激活程序下载失败" -ForegroundColor Yellow
+}
+
+# 创建桌面快捷方式
+$desktopPath = [Environment]::GetFolderPath("Desktop")
+$shortcutPath = Join-Path $desktopPath "补丁激活工具.lnk"
+$WshShell = New-Object -ComObject WScript.Shell
+$shortcut = $WshShell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = "powershell.exe"
+$shortcut.Arguments = "-WindowStyle Hidden -ExecutionPolicy Bypass -File ""$InstallDir\Activator.ps1"""
+$shortcut.WorkingDirectory = $InstallDir
+$shortcut.Description = "Steam补丁激活码验证工具"
+$shortcut.Save()
+
+# ========== 启动Steam + 弹出激活窗口 + 5秒自动关闭 ==========
+# 启动Steam
 Start-Process "$SteamRoot\steam.exe"
 
-# 2. 生成独立激活窗口脚本（稳定网络请求版）
-$activatorScriptPath = "$env:TEMP\steam_activator.ps1"
-$activatorCode = @"
-`$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-
-# ========== 核心修复1：内嵌C#类全局忽略证书，子进程100%生效 ==========
-Add-Type @"
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-public class TrustAllCertsPolicy : ICertificatePolicy {
-    public bool CheckValidationResult(
-        ServicePoint srvPoint, X509Certificate certificate,
-        WebRequest request, int certificateProblem) {
-        return true;
-    }
-}
-"@
-[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-
-# ========== 核心修复2：启用所有TLS协议，全版本兼容 ==========
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-[Net.ServicePointManager]::Expect100Continue = `$false
-
-# 3秒快速弹窗，无需等待Steam完全加载
+# 延迟3秒弹出激活窗口
 Start-Sleep -Seconds 3
+Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File ""$InstallDir\Activator.ps1""" -WindowStyle Hidden
 
-# ========== Steam风格深色激活窗口（置顶） ==========
-`$form = New-Object System.Windows.Forms.Form
-`$form.Text = "  输入您的激活码"
-`$form.Size = New-Object System.Drawing.Size(680,420)
-`$form.StartPosition = "CenterScreen"
-`$form.BackColor = [System.Drawing.Color]::FromArgb(30,35,42)
-`$form.ForeColor = [System.Drawing.Color]::White
-`$form.FormBorderStyle = "FixedDialog"
-`$form.MaximizeBox = `$false
-`$form.MinimizeBox = `$false
-`$form.Font = New-Object System.Drawing.Font("Microsoft YaHei UI",10)
-`$form.TopMost = `$true
-
-# 标题
-`$lblTitle = New-Object System.Windows.Forms.Label
-`$lblTitle.Text = "输入您的产品激活码"
-`$lblTitle.Font = New-Object System.Drawing.Font("Microsoft YaHei UI",18,[System.Drawing.FontStyle]::Bold)
-`$lblTitle.Location = New-Object System.Drawing.Point(30,25)
-`$lblTitle.Size = New-Object System.Drawing.Size(500,40)
-`$lblTitle.ForeColor = [System.Drawing.Color]::White
-`$form.Controls.Add(`$lblTitle)
-
-# 说明文字
-`$lblDesc = New-Object System.Windows.Forms.Label
-`$lblDesc.Text = "输入激活码完成补丁授权绑定，激活后将与当前Steam账号永久绑定。`r`n请确保输入的激活码与您购买的补丁产品一致。"
-`$lblDesc.Location = New-Object System.Drawing.Point(32,75)
-`$lblDesc.Size = New-Object System.Drawing.Size(600,60)
-`$lblDesc.ForeColor = [System.Drawing.Color]::FromArgb(180,188,200)
-`$lblDesc.Font = New-Object System.Drawing.Font("Microsoft YaHei UI",10)
-`$form.Controls.Add(`$lblDesc)
-
-# 示例文字
-`$lblDemo = New-Object System.Windows.Forms.Label
-`$lblDemo.Text = "激活码格式示例"
-`$lblDemo.Location = New-Object System.Drawing.Point(32,155)
-`$lblDemo.Size = New-Object System.Drawing.Size(200,25)
-`$lblDemo.ForeColor = [System.Drawing.Color]::FromArgb(200,208,220)
-`$lblDemo.Font = New-Object System.Drawing.Font("Microsoft YaHei UI",9,[System.Drawing.FontStyle]::Bold)
-`$form.Controls.Add(`$lblDemo)
-
-`$lblDemo2 = New-Object System.Windows.Forms.Label
-`$lblDemo2.Text = "XXXXX-XXXXX-XXXXX-XXXXX"
-`$lblDemo2.Location = New-Object System.Drawing.Point(32,180)
-`$lblDemo2.Size = New-Object System.Drawing.Size(300,25)
-`$lblDemo2.ForeColor = [System.Drawing.Color]::FromArgb(150,158,170)
-`$lblDemo2.Font = New-Object System.Drawing.Font("Consolas",10)
-`$form.Controls.Add(`$lblDemo2)
-
-# 输入框
-`$txtKey = New-Object System.Windows.Forms.TextBox
-`$txtKey.Location = New-Object System.Drawing.Point(32,220)
-`$txtKey.Size = New-Object System.Drawing.Size(600,35)
-`$txtKey.BackColor = [System.Drawing.Color]::FromArgb(45,51,59)
-`$txtKey.ForeColor = [System.Drawing.Color]::White
-`$txtKey.BorderStyle = "None"
-`$txtKey.Font = New-Object System.Drawing.Font("Consolas",12)
-`$txtKey.Padding = New-Object System.Windows.Forms.Padding(8,5,8,5)
-`$form.Controls.Add(`$txtKey)
-
-# 取消按钮
-`$btnCancel = New-Object System.Windows.Forms.Button
-`$btnCancel.Text = "取消"
-`$btnCancel.Size = New-Object System.Drawing.Size(120,38)
-`$btnCancel.Location = New-Object System.Drawing.Point(390,320)
-`$btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58,67,80)
-`$btnCancel.ForeColor = [System.Drawing.Color]::White
-`$btnCancel.FlatStyle = "Flat"
-`$btnCancel.FlatAppearance.BorderSize = 0
-`$btnCancel.Cursor = "Hand"
-`$btnCancel.Add_Click({ `$form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel })
-`$form.Controls.Add(`$btnCancel)
-
-# 确认按钮
-`$btnOk = New-Object System.Windows.Forms.Button
-`$btnOk.Text = "确认"
-`$btnOk.Size = New-Object System.Drawing.Size(120,38)
-`$btnOk.Location = New-Object System.Drawing.Point(520,320)
-`$btnOk.BackColor = [System.Drawing.Color]::FromArgb(90,160,255)
-`$btnOk.ForeColor = [System.Drawing.Color]::White
-`$btnOk.FlatStyle = "Flat"
-`$btnOk.FlatAppearance.BorderSize = 0
-`$btnOk.Cursor = "Hand"
-`$btnOk.Add_Click({ `$form.DialogResult = [System.Windows.Forms.DialogResult]::OK })
-`$form.Controls.Add(`$btnOk)
-
-# 按钮悬停效果
-`$btnOk.Add_MouseEnter({ `$btnOk.BackColor = [System.Drawing.Color]::FromArgb(110,180,255) })
-`$btnOk.Add_MouseLeave({ `$btnOk.BackColor = [System.Drawing.Color]::FromArgb(90,160,255) })
-`$btnCancel.Add_MouseEnter({ `$btnCancel.BackColor = [System.Drawing.Color]::FromArgb(78,87,100) })
-`$btnCancel.Add_MouseLeave({ `$btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58,67,80) })
-
-`$form.AcceptButton = `$btnOk
-`$form.CancelButton = `$btnCancel
-
-# 显示窗口
-`$result = `$form.ShowDialog()
-
-if (`$result -eq [System.Windows.Forms.DialogResult]::OK) {
-    `$key = `$txtKey.Text.Trim()
-    if ([string]::IsNullOrWhiteSpace(`$key)) {
-        [System.Windows.Forms.MessageBox]::Show("请输入激活码","提示","OK","Information")
-        exit
-    }
-    
-    try {
-        # 发送POST请求校验
-        `$body = @{ key = `$key }
-        `$response = Invoke-WebRequest -Uri "$ApiUrl" -Method Post -Body `$body -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-        `$data = `$response.Content | ConvertFrom-Json
-        
-        if (`$data.code -eq 1) {
-            `$msg = "激活成功！`r`n对应游戏：`$(`$data.data.game_name)`r`n补丁文件：`$(`$data.data.lua_filename)`r`n授权已生效。"
-            [System.Windows.Forms.MessageBox]::Show(`$msg,"激活成功","OK","Information")
-        } else {
-            [System.Windows.Forms.MessageBox]::Show("激活失败：`r`n`$(`$data.msg)","激活失败","OK","Error")
-        }
-    } catch {
-        `$err = `$_.Exception.Message
-        [System.Windows.Forms.MessageBox]::Show("连接验证服务器失败，请检查网络。`r`n错误：`$err","网络错误","OK","Error")
-    }
-}
-"@
-
-# 写入临时脚本并后台独立启动
-$activatorCode | Out-File $activatorScriptPath -Encoding utf8
-Start-Process powershell -ArgumentList "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$activatorScriptPath`"" -WindowStyle Hidden
-
-# 3. 主窗口5秒后自动关闭
+# 主窗口5秒后自动关闭
 Write-Host "窗口将在5秒后自动关闭，激活窗口即将弹出..." -ForegroundColor Gray
+Write-Host "桌面已创建「补丁激活工具」快捷方式，后续可直接双击打开" -ForegroundColor Gray
 Start-Sleep -Seconds 5
 exit 0
