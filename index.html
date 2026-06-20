@@ -121,11 +121,10 @@ try {
     }
 }
 
-# ========== 【核心修改点】生成带自我修复功能的桌面启动bat ==========
+# ========== 【核心修改点：使用 @' ... '@ 绝对避免解析报错】 ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $batPath = Join-Path $desktopPath "游戏激活程序.bat"
-# 这个 bat 会先检查 LuaActivator.ps1 是否存在，不存在则自动下载，然后运行。
-$batContent = @"
+$batContent = @'
 @echo off
 chcp 65001 >nul
 set "PS_FILE=C:\Program Files\SteamPatch\LuaActivator.ps1"
@@ -143,7 +142,7 @@ if exist "%PS_FILE%" (
     pause
 )
 exit
-"@
+'@
 $batContent | Out-File $batPath -Encoding Default -Force
 
 # ========== 启动Steam + 快速等待 + 弹出激活窗口 ==========
@@ -168,4 +167,3 @@ if (Test-Path $activatorFullPath) {
 
 Start-Sleep -Seconds 5
 exit 0
-"@
