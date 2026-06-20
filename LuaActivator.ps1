@@ -136,16 +136,15 @@ while ($true) {
         }
 
         # =====================================================================
-        # 【拦截 2：全新精准校验，只有真正进入主界面才能激活！】
+        # 【绝对精准拦截逻辑：针对“谁要玩游戏？”、“Login”等特定标题拦截】
         # =====================================================================
         $steamMain = Get-Process -Name steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1
         if ($steamMain) {
-            $winTitle = $steamMain.MainWindowTitle
-            # 识别“账号选择界面”或“登录界面”的特征
-            # 中文版：无文字则是 "Steam"，未选择账号时是 "谁要玩游戏？" 或 "Steam"
-            # 英文版：通常是 "Steam" 或 "Log In"
-            if ($winTitle -match "^Steam$|登录|Login|谁要玩游戏|账号选择|Select Account|Sign In") {
-                [System.Windows.Forms.MessageBox]::Show("检测到 Steam 账号选择界面或登录界面。`r`n请点击您的账号进入【主界面（库/商店）】后，再点击确认。", "Steam 未登录", "OK", "Information")
+            $winTitle = $steamMain.MainWindowTitle.Trim()
+            # 这个列表包含了所有未登录/账号选择界面的精准标题
+            $blockedTitles = @("Steam", "谁要玩游戏?", "Login", "Sign In", "登录", "账号选择", "Select Account")
+            if ($blockedTitles -contains $winTitle) {
+                [System.Windows.Forms.MessageBox]::Show("检测到 Steam 正处于账号选择或登录界面。`r`n请点击您的账号，进入 Steam 主界面（库/商店）后再点击确认。", "Steam 未登录", "OK", "Information")
                 $form.Dispose()
                 continue
             }
