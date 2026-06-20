@@ -1,4 +1,4 @@
-# 激活码验证独立程序
+﻿# 激活码验证独立程序
 try {
     $ErrorActionPreference = 'Stop'
     Add-Type -AssemblyName System.Windows.Forms
@@ -7,13 +7,10 @@ try {
 } catch {
     exit
 }
-
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 [System.Net.ServicePointManager]::Expect100Continue = $false
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
-
 $ApiUrl = "http://47.100.104.45/api.php"
-
 try {
     $defFont = New-Object System.Drawing.Font("Microsoft YaHei", 10)
     $titleFont = New-Object System.Drawing.Font("Microsoft YaHei", 16, [System.Drawing.FontStyle]::Bold)
@@ -21,7 +18,6 @@ try {
     $defFont = [System.Drawing.SystemFonts]::DefaultFont
     $titleFont = New-Object System.Drawing.Font($defFont.FontFamily, 16, [System.Drawing.FontStyle]::Bold)
 }
-
 while ($true) {
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "输入您的产品激活码"
@@ -34,7 +30,6 @@ while ($true) {
     $form.MinimizeBox = $false
     $form.Font = $defFont
     $form.TopMost = $true
-
     $lblTitle = New-Object System.Windows.Forms.Label
     $lblTitle.Text = "输入您的产品激活码"
     $lblTitle.Font = $titleFont
@@ -42,15 +37,13 @@ while ($true) {
     $lblTitle.Size = New-Object System.Drawing.Size(500, 30)
     $lblTitle.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
     $form.Controls.Add($lblTitle)
-
     $lblDesc = New-Object System.Windows.Forms.Label
     $lblDesc.Text = "输入激活码完成游戏授权绑定，激活后将与当前 Steam 账号永久绑定。`r`n请确保输入的激活码与您购买的游戏产品一致。"
-    $lblDesc.Location = New-Object System.Drawing.Point(30, 65)
+    $lblDesc.Location = New-Object System.Drawing.Point(32, 65)
     $lblDesc.Size = New-Object System.Drawing.Size(500, 45)
     $lblDesc.ForeColor = [System.Drawing.Color]::FromArgb(180, 188, 200)
     $lblDesc.Font = New-Object System.Drawing.Font($defFont.FontFamily, 10)
     $form.Controls.Add($lblDesc)
-
     $lblDemo = New-Object System.Windows.Forms.Label
     $lblDemo.Text = "激活码格式示例"
     $lblDemo.Location = New-Object System.Drawing.Point(30, 135)
@@ -58,7 +51,6 @@ while ($true) {
     $lblDemo.ForeColor = [System.Drawing.Color]::FromArgb(200, 208, 220)
     $lblDemo.Font = New-Object System.Drawing.Font($defFont.FontFamily, 9, [System.Drawing.FontStyle]::Bold)
     $form.Controls.Add($lblDemo)
-
     $lblDemo2 = New-Object System.Windows.Forms.Label
     $lblDemo2.Text = "XXXXX-XXXXX-XXXXX-XXXXX"
     $lblDemo2.Location = New-Object System.Drawing.Point(30, 160)
@@ -66,7 +58,6 @@ while ($true) {
     $lblDemo2.ForeColor = [System.Drawing.Color]::FromArgb(160, 168, 180)
     $lblDemo2.Font = New-Object System.Drawing.Font($defFont.FontFamily, 10)
     $form.Controls.Add($lblDemo2)
-
     $txtKey = New-Object System.Windows.Forms.TextBox
     $txtKey.Location = New-Object System.Drawing.Point(30, 200)
     $txtKey.Size = New-Object System.Drawing.Size(540, 34)
@@ -76,7 +67,6 @@ while ($true) {
     $txtKey.Font = New-Object System.Drawing.Font($defFont.FontFamily, 12)
     $txtKey.Padding = New-Object System.Windows.Forms.Padding(8, 5, 8, 5)
     $form.Controls.Add($txtKey)
-
     $btnCancel = New-Object System.Windows.Forms.Button
     $btnCancel.Text = "取消"
     $btnCancel.Size = New-Object System.Drawing.Size(100, 36)
@@ -88,7 +78,6 @@ while ($true) {
     $btnCancel.Cursor = "Hand"
     $btnCancel.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel })
     $form.Controls.Add($btnCancel)
-
     $btnOk = New-Object System.Windows.Forms.Button
     $btnOk.Text = "确认"
     $btnOk.Size = New-Object System.Drawing.Size(100, 36)
@@ -100,22 +89,18 @@ while ($true) {
     $btnOk.Cursor = "Hand"
     $btnOk.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::OK })
     $form.Controls.Add($btnOk)
-
     $btnOk.Add_MouseEnter({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(92, 137, 230) })
     $btnOk.Add_MouseLeave({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(62, 107, 200) })
     $btnCancel.Add_MouseEnter({ $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(78, 87, 100) })
     $btnCancel.Add_MouseLeave({ $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58, 67, 80) })
-
     $form.AcceptButton = $btnOk
     $form.CancelButton = $btnCancel
-
     $result = $form.ShowDialog()
     
     if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
         $form.Dispose()
         exit
     }
-
     if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
         $key = $txtKey.Text.Trim()
         if ([string]::IsNullOrWhiteSpace($key)) {
@@ -127,30 +112,26 @@ while ($true) {
         $steamid = $null
         $steamPath = $null
         $steamProc = Get-Process -Name "steam" -ErrorAction SilentlyContinue
-
-        # 拦截 1：检查 Steam 进程是否存在
+        # 拦截1：Steam 进程不存在 → 直接拦截
         if (-not $steamProc) {
             [System.Windows.Forms.MessageBox]::Show("未检测到 Steam 正在运行。`r`n请先登录您的 Steam 客户端，再重新点击确认。", "未登录 Steam", "OK", "Information")
             $form.Dispose()
             continue
         }
 
-        # =====================================================================
-        # 【绝对精准拦截逻辑：针对“谁要玩游戏？”、“Login”等特定标题拦截】
-        # =====================================================================
-        $steamMain = Get-Process -Name steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1
-        if ($steamMain) {
-            $winTitle = $steamMain.MainWindowTitle.Trim()
-            # 这个列表包含了所有未登录/账号选择界面的精准标题
-            $blockedTitles = @("Steam", "谁要玩游戏?", "Login", "Sign In", "登录", "账号选择", "Select Account")
-            if ($blockedTitles -contains $winTitle) {
-                [System.Windows.Forms.MessageBox]::Show("检测到 Steam 正处于账号选择或登录界面。`r`n请点击您的账号，进入 Steam 主界面（库/商店）后再点击确认。", "Steam 未登录", "OK", "Information")
+        # 拦截2：窗口标题纯「Steam」→ 判定为登录界面，拦截
+        # 最小化/托盘无窗口句柄时，直接放行，不误杀已登录用户
+        $mainProc = $steamProc | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+        if ($mainProc) {
+            $winTitle = $mainProc.MainWindowTitle.Trim()
+            if ($winTitle -eq "Steam") {
+                [System.Windows.Forms.MessageBox]::Show("检测到 Steam 停留在登录界面。`r`n请完成登录并进入 Steam 主界面后，再点击确认。", "Steam 未登录", "OK", "Information")
                 $form.Dispose()
                 continue
             }
         }
-        # =====================================================================
         
+        # 读取 Steam 安装路径
         try {
             $regPath = "HKCU:\Software\Valve\Steam"
             $steamPath = (Get-ItemProperty -Path $regPath -Name "SteamPath" -ErrorAction SilentlyContinue).SteamPath
@@ -172,7 +153,6 @@ while ($true) {
             $form.Dispose()
             continue
         }
-
         $vdfPath = Join-Path $steamPath "config\loginusers.vdf"
         if (-not (Test-Path $vdfPath)) {
             [System.Windows.Forms.MessageBox]::Show("没有读取到 Steam 的登录文件 (loginusers.vdf)。`r`n请确保已登录 Steam，并尝试【右键】此激活工具，选择""以管理员身份运行""。", "读取 Steam 失败", "OK", "Error")
@@ -180,18 +160,28 @@ while ($true) {
             continue
         }
 
+        # 读取当前登录账号ID（注册表优先，VDF兜底）
+        $activeSteamId = $null
         try {
-            $vdfContent = Get-Content $vdfPath -Raw
-            if ($vdfContent -match '"(\d+)"\s*\{[^}]*"MostRecent"\s*"1"') {
-                $steamid = $matches[1]
+            $regActive = (Get-ItemProperty "HKCU:\Software\Valve\Steam" -Name "ActiveUser" -ErrorAction SilentlyContinue).ActiveUser
+            if ($regActive -and $regActive -ne 0) {
+                $activeSteamId = $regActive.ToString()
             }
         } catch {}
-        
-        if ([string]::IsNullOrWhiteSpace($steamid)) {
-            [System.Windows.Forms.MessageBox]::Show("未检测到当前 Steam 已成功登录账号。`r`n请确保您已在 Steam 客户端成功登录并进入主界面。", "Steam 未登录", "OK", "Information")
+        if ([string]::IsNullOrWhiteSpace($activeSteamId)) {
+            try {
+                $vdfContent = Get-Content $vdfPath -Raw
+                if ($vdfContent -match '"(\d+)"\s*\{[^}]*"MostRecent"\s*"1"') {
+                    $activeSteamId = $matches[1]
+                }
+            } catch {}
+        }
+        if ([string]::IsNullOrWhiteSpace($activeSteamId)) {
+            [System.Windows.Forms.MessageBox]::Show("未检测到 Steam 已登录账号。`r`n请先启动 Steam 并登录您的账号后，再点击确认。", "Steam 未登录", "OK", "Information")
             $form.Dispose()
             continue
         }
+        $steamid = $activeSteamId
 
         try {
             $getUrl = $ApiUrl + "?key=" + [System.Web.HttpUtility]::UrlEncode($key) + "&steamid=" + $steamid
@@ -203,22 +193,18 @@ while ($true) {
                 $form.Dispose()
                 continue
             }
-
             if ($data.code -eq 1) {
                 $luaFileName = $data.lua
                 $luaFolder = Join-Path $steamPath "config\lua"
                 if (-not (Test-Path $luaFolder)) { New-Item -ItemType Directory -Force -Path $luaFolder | Out-Null }
-
                 try {
                     $luaBaseUrl = "http://47.100.104.45/lua/"
                     $luaFullUrl = $luaBaseUrl + $luaFileName
                     $luaLocalPath = Join-Path $luaFolder $luaFileName
                     $webClient = New-Object System.Net.WebClient
                     $webClient.DownloadFile($luaFullUrl, $luaLocalPath)
-
                     $gameName = $data.game_name
                     if ([string]::IsNullOrWhiteSpace($gameName)) { $gameName = "已激活补丁" }
-
                     $formSuccess = New-Object System.Windows.Forms.Form
                     $formSuccess.Size = New-Object System.Drawing.Size(480, 220)
                     $formSuccess.StartPosition = "CenterScreen"
@@ -247,7 +233,6 @@ while ($true) {
                     $btnSuccessPanel.Height = 50
                     $btnSuccessPanel.BackColor = [System.Drawing.Color]::FromArgb(62, 107, 200)
                     $formSuccess.Controls.Add($btnSuccessPanel)
-
                     $btnOkSuccess = New-Object System.Windows.Forms.Button
                     $btnOkSuccess.Text = "确定"
                     $btnOkSuccess.Size = New-Object System.Drawing.Size(480, 50)
@@ -262,11 +247,9 @@ while ($true) {
                     $btnOkSuccess.Add_MouseLeave({ $btnOkSuccess.BackColor = [System.Drawing.Color]::Transparent })
                     $btnOkSuccess.Add_Click({ $formSuccess.Close() })
                     $btnSuccessPanel.Controls.Add($btnOkSuccess)
-
                     $formSuccess.ShowDialog()
                     $form.Dispose()
                     break
-
                 } catch {
                     [System.Windows.Forms.MessageBox]::Show("激活成功，但 Lua 补丁下载失败。`r`n请确保阿里云服务器 `/lua/` 文件夹里有对应的文件。`r`n错误：" + $_.Exception.Message, "下载提醒", "OK", "Warning")
                     $form.Dispose()
