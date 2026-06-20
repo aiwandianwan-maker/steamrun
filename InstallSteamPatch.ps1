@@ -2,7 +2,7 @@
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ========== 全局TLS兼容 + 证书忽略 ==========
+# ========== 全局TLS兼容 ==========
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
@@ -131,15 +131,16 @@ exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
 
-# ========== 启动Steam + 智能等待 + 弹出激活窗口 ==========
+# ========== 启动Steam + 快速等待 + 弹出激活窗口 ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "🔄 Steam已启动，正在等待界面加载..." -ForegroundColor Gray
+Write-Host "⏳ Steam已启动，正在等待界面加载..." -ForegroundColor Gray
 
+# 【修改点】加快检测速度，只要检测到包含 Steam 主标题就立刻弹出，不等人点登录
 $waitCounter = 0
-while ($waitCounter -lt 30) {
+while ($waitCounter -lt 15) {
     $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
-    if ($winTitle -match "Steam|Library|库|商店|Store") { break }
-    Start-Sleep -Seconds 1
+    if ($winTitle -match "Steam") { break }
+    Start-Sleep -Milliseconds 500
     $waitCounter++
 }
 Start-Sleep -Seconds 1
@@ -150,5 +151,7 @@ if (Test-Path $activatorFullPath) {
     Write-Host "⚠️ WARNING: 激活工具不存在，请检查安装目录" -ForegroundColor Yellow
     Start-Sleep 5
 }
+
+# 5秒后自动关闭这个 PowerShell 黑框窗口
 Start-Sleep -Seconds 5
 exit 0
