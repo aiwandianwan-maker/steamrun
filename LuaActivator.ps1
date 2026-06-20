@@ -69,7 +69,7 @@ while ($true) {
 
     $txtKey = New-Object System.Windows.Forms.TextBox
     $txtKey.Location = New-Object System.Drawing.Point(30, 200)
-    $txtKey.Size = New-Object System.Drawing.Size(520, 40) # 【修改点】宽度从500增加到520，高度从35增加到40
+    $txtKey.Size = New-Object System.Drawing.Size(520, 40)
     $txtKey.BackColor = [System.Drawing.Color]::FromArgb(47, 53, 58)
     $txtKey.ForeColor = [System.Drawing.Color]::White
     $txtKey.BorderStyle = "None"
@@ -198,7 +198,8 @@ while ($true) {
                     $webClient = New-Object System.Net.WebClient
                     $webClient.DownloadFile($luaFullUrl, $luaLocalPath)
 
-                    $gameName = $data.data.game_name
+                    # 【核心修复点】：把 $data.data.game_name 改为 $data.game_name
+                    $gameName = $data.game_name
                     if ([string]::IsNullOrWhiteSpace($gameName)) { $gameName = "已激活补丁" }
 
                     $formSuccess = New-Object System.Windows.Forms.Form
