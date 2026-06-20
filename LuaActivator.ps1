@@ -14,7 +14,6 @@ try {
 
 $ApiUrl = "http://47.100.104.45/api.php"
 
-# 字体容错
 try {
     $defFont = New-Object System.Drawing.Font("Microsoft YaHei", 10)
     $titleFont = New-Object System.Drawing.Font("Microsoft YaHei", 16, [System.Drawing.FontStyle]::Bold)
@@ -27,9 +26,9 @@ while ($true) {
     # ============= 【UI 样式：仿 Steam 激活码窗口】 =============
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "输入您的产品激活码"
-    $form.Size = New-Object System.Drawing.Size(580, 320)
+    $form.Size = New-Object System.Drawing.Size(580, 380) # 【修改点】高度从 320 增加到 380
     $form.StartPosition = "CenterScreen"
-    $form.BackColor = [System.Drawing.Color]::FromArgb(35, 39, 42)   # 蒸汽深色背景
+    $form.BackColor = [System.Drawing.Color]::FromArgb(35, 39, 42)
     $form.ForeColor = [System.Drawing.Color]::White
     $form.FormBorderStyle = "FixedDialog"
     $form.MaximizeBox = $false
@@ -87,7 +86,7 @@ while ($true) {
     $btnCancel = New-Object System.Windows.Forms.Button
     $btnCancel.Text = "取消"
     $btnCancel.Size = New-Object System.Drawing.Size(100, 36)
-    $btnCancel.Location = New-Object System.Drawing.Point(310, 260)
+    $btnCancel.Location = New-Object System.Drawing.Point(310, 290) # 【修改点】Y坐标从260改为290
     $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58, 67, 80)
     $btnCancel.ForeColor = [System.Drawing.Color]::White
     $btnCancel.FlatStyle = "Flat"
@@ -96,11 +95,11 @@ while ($true) {
     $btnCancel.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel })
     $form.Controls.Add($btnCancel)
 
-    # 确认按钮 (改成蒸汽蓝)
+    # 确认按钮
     $btnOk = New-Object System.Windows.Forms.Button
     $btnOk.Text = "确认"
     $btnOk.Size = New-Object System.Drawing.Size(100, 36)
-    $btnOk.Location = New-Object System.Drawing.Point(430, 260)
+    $btnOk.Location = New-Object System.Drawing.Point(430, 290) # 【修改点】Y坐标从260改为290
     $btnOk.BackColor = [System.Drawing.Color]::FromArgb(62, 107, 200)
     $btnOk.ForeColor = [System.Drawing.Color]::White
     $btnOk.FlatStyle = "Flat"
@@ -109,7 +108,6 @@ while ($true) {
     $btnOk.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::OK })
     $form.Controls.Add($btnOk)
 
-    # 按钮悬停效果
     $btnOk.Add_MouseEnter({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(92, 137, 230) })
     $btnOk.Add_MouseLeave({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(62, 107, 200) })
     $btnCancel.Add_MouseEnter({ $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(78, 87, 100) })
@@ -118,7 +116,6 @@ while ($true) {
     $form.AcceptButton = $btnOk
     $form.CancelButton = $btnCancel
 
-    # 显示窗口并等待操作
     $result = $form.ShowDialog()
     
     if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
@@ -134,11 +131,9 @@ while ($true) {
             continue
         }
         
-        # ====== 精准读取 Steam 安装路径与当前登录 ID ======
         $steamid = $null
         $steamPath = $null
         $steamProc = Get-Process -Name "steam" -ErrorAction SilentlyContinue
-        
         if (-not $steamProc) {
             [System.Windows.Forms.MessageBox]::Show("未检测到 Steam 正在运行。`r`n请先登录您的 Steam 客户端，再重新点击确认。", "未登录 Steam", "OK", "Information")
             $form.Dispose()
@@ -209,9 +204,9 @@ while ($true) {
                     $luaLocalPath = Join-Path $luaFolder $luaFileName
                     $webClient = New-Object System.Net.WebClient
                     $webClient.DownloadFile($luaFullUrl, $luaLocalPath)
-                    
+
+                    # 【修正点】：直接获取 API 返回的游戏名，不再强制设置默认值
                     $gameName = $data.data.game_name
-                    if ([string]::IsNullOrWhiteSpace($gameName)) { $gameName = "已激活补丁" }
                     
                     # ============= 【UI 样式：仿 Steam 激活成功弹窗】 =============
                     $formSuccess = New-Object System.Windows.Forms.Form
@@ -221,7 +216,6 @@ while ($true) {
                     $formSuccess.FormBorderStyle = "None"
                     $formSuccess.TopMost = $true
                     
-                    # 成功标题：加上游戏名
                     $lblTitleSuccess = New-Object System.Windows.Forms.Label
                     $lblTitleSuccess.Text = "激活成功：$gameName"
                     $lblTitleSuccess.Font = New-Object System.Drawing.Font("Microsoft YaHei", 14, [System.Drawing.FontStyle]::Bold)
@@ -230,7 +224,6 @@ while ($true) {
                     $lblTitleSuccess.ForeColor = [System.Drawing.Color]::White
                     $formSuccess.Controls.Add($lblTitleSuccess)
                     
-                    # 成功副标题
                     $lblDescSuccess = New-Object System.Windows.Forms.Label
                     $lblDescSuccess.Text = "您的产品激活码已被成功激活。相关产品现在已与您的 Steam 账户永久关联。`r`n您必须登录此账户才能访问您刚刚在 Steam 上激活的产品。"
                     $lblDescSuccess.Font = New-Object System.Drawing.Font("Microsoft YaHei", 10)
@@ -239,7 +232,6 @@ while ($true) {
                     $lblDescSuccess.ForeColor = [System.Drawing.Color]::FromArgb(190, 195, 200)
                     $formSuccess.Controls.Add($lblDescSuccess)
                     
-                    # 底部 蓝色条 + 确定按钮
                     $btnSuccessPanel = New-Object System.Windows.Forms.Panel
                     $btnSuccessPanel.Dock = "Bottom"
                     $btnSuccessPanel.Height = 50
@@ -248,7 +240,7 @@ while ($true) {
 
                     $btnOkSuccess = New-Object System.Windows.Forms.Button
                     $btnOkSuccess.Text = "确定"
-                    $btnOkSuccess.Size = New-Object System.Drawing.Size(480, 50) # 撑满宽度
+                    $btnOkSuccess.Size = New-Object System.Drawing.Size(480, 50)
                     $btnOkSuccess.Location = New-Object System.Drawing.Point(0, 0)
                     $btnOkSuccess.BackColor = [System.Drawing.Color]::Transparent
                     $btnOkSuccess.ForeColor = [System.Drawing.Color]::White
