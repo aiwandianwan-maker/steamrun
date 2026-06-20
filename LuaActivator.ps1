@@ -3,18 +3,19 @@ try {
     $ErrorActionPreference = 'Stop'
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
+    Add-Type -AssemblyName System.Web
 } catch {
     exit
 }
 
-# 网络配置
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 [System.Net.ServicePointManager]::Expect100Continue = $false
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
-$ApiUrl = "https://api.awsteam.icu/api.php"
+# 验证 API 接口
+$ApiUrl = "http://47.100.104.45/api.php"
 
-# 字体容错：优先雅黑，不存在则用系统默认字体
+# 字体容错
 try {
     $defFont = New-Object System.Drawing.Font("Microsoft YaHei", 10)
     $titleFont = New-Object System.Drawing.Font("Microsoft YaHei", 18, [System.Drawing.FontStyle]::Bold)
@@ -25,128 +26,270 @@ try {
     $codeFont = [System.Drawing.SystemFonts]::DefaultFont
 }
 
-# 浏览器UA，避免被服务器拦截
-$reqHeaders = @{
-    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-}
+# 【核心】使用 while($true) 无限循环
+while ($true) {
+    # 创建主窗口
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "  输入您的激活码"
+    $form.Size = New-Object System.Drawing.Size(680, 420)
+    $form.StartPosition = "CenterScreen"
+    $form.BackColor = [System.Drawing.Color]::FromArgb(30, 35, 42)
+    $form.ForeColor = [System.Drawing.Color]::White
+    $form.FormBorderStyle = "FixedDialog"
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+    $form.Font = $defFont
+    $form.TopMost = $true
 
-# 主窗口
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "  输入您的激活码"
-$form.Size = New-Object System.Drawing.Size(680, 420)
-$form.StartPosition = "CenterScreen"
-$form.BackColor = [System.Drawing.Color]::FromArgb(30, 35, 42)
-$form.ForeColor = [System.Drawing.Color]::White
-$form.FormBorderStyle = "FixedDialog"
-$form.MaximizeBox = $false
-$form.MinimizeBox = $false
-$form.Font = $defFont
-$form.TopMost = $true
+    # 标题
+    $lblTitle = New-Object System.Windows.Forms.Label
+    $lblTitle.Text = "输入您的产品激活码"
+    $lblTitle.Font = $titleFont
+    $lblTitle.Location = New-Object System.Drawing.Point(30, 25)
+    $lblTitle.Size = New-Object System.Drawing.Size(500, 40)
+    $lblTitle.ForeColor = [System.Drawing.Color]::White
+    $form.Controls.Add($lblTitle)
 
-# 标题
-$lblTitle = New-Object System.Windows.Forms.Label
-$lblTitle.Text = "输入您的产品激活码"
-$lblTitle.Font = $titleFont
-$lblTitle.Location = New-Object System.Drawing.Point(30, 25)
-$lblTitle.Size = New-Object System.Drawing.Size(500, 40)
-$lblTitle.ForeColor = [System.Drawing.Color]::White
-$form.Controls.Add($lblTitle)
+    # 说明文字
+    $lblDesc = New-Object System.Windows.Forms.Label
+    $lblDesc.Text = "输入激活码完成补丁授权绑定，激活后将与当前Steam账号永久绑定。`r`n请确保输入的激活码与您购买的补丁产品一致。"
+    $lblDesc.Location = New-Object System.Drawing.Point(32, 75)
+    $lblDesc.Size = New-Object System.Drawing.Size(600, 60)
+    $lblDesc.ForeColor = [System.Drawing.Color]::FromArgb(180, 188, 200)
+    $lblDesc.Font = $defFont
+    $form.Controls.Add($lblDesc)
 
-# 说明文字
-$lblDesc = New-Object System.Windows.Forms.Label
-$lblDesc.Text = "输入激活码完成补丁授权绑定，激活后将与当前Steam账号永久绑定。`r`n请确保输入的激活码与您购买的补丁产品一致。"
-$lblDesc.Location = New-Object System.Drawing.Point(32, 75)
-$lblDesc.Size = New-Object System.Drawing.Size(600, 60)
-$lblDesc.ForeColor = [System.Drawing.Color]::FromArgb(180, 188, 200)
-$lblDesc.Font = $defFont
-$form.Controls.Add($lblDesc)
+    # 格式示例
+    $lblDemo = New-Object System.Windows.Forms.Label
+    $lblDemo.Text = "激活码格式示例"
+    $lblDemo.Location = New-Object System.Drawing.Point(32, 155)
+    $lblDemo.Size = New-Object System.Drawing.Size(200, 25)
+    $lblDemo.ForeColor = [System.Drawing.Color]::FromArgb(200, 208, 220)
+    $lblDemo.Font = New-Object System.Drawing.Font($defFont.FontFamily, 9, [System.Drawing.FontStyle]::Bold)
+    $form.Controls.Add($lblDemo)
 
-# 格式示例
-$lblDemo = New-Object System.Windows.Forms.Label
-$lblDemo.Text = "激活码格式示例"
-$lblDemo.Location = New-Object System.Drawing.Point(32, 155)
-$lblDemo.Size = New-Object System.Drawing.Size(200, 25)
-$lblDemo.ForeColor = [System.Drawing.Color]::FromArgb(200, 208, 220)
-$lblDemo.Font = New-Object System.Drawing.Font($defFont.FontFamily, 9, [System.Drawing.FontStyle]::Bold)
-$form.Controls.Add($lblDemo)
+    $lblDemo2 = New-Object System.Windows.Forms.Label
+    $lblDemo2.Text = "XXXXX-XXXXX-XXXXX-XXXXX"
+    $lblDemo2.Location = New-Object System.Drawing.Point(32, 180)
+    $lblDemo2.Size = New-Object System.Drawing.Size(300, 25)
+    $lblDemo2.ForeColor = [System.Drawing.Color]::FromArgb(150, 158, 170)
+    $lblDemo2.Font = $codeFont
+    $form.Controls.Add($lblDemo2)
 
-$lblDemo2 = New-Object System.Windows.Forms.Label
-$lblDemo2.Text = "XXXXX-XXXXX-XXXXX-XXXXX"
-$lblDemo2.Location = New-Object System.Drawing.Point(32, 180)
-$lblDemo2.Size = New-Object System.Drawing.Size(300, 25)
-$lblDemo2.ForeColor = [System.Drawing.Color]::FromArgb(150, 158, 170)
-$lblDemo2.Font = $codeFont
-$form.Controls.Add($lblDemo2)
+    # 输入框
+    $txtKey = New-Object System.Windows.Forms.TextBox
+    $txtKey.Location = New-Object System.Drawing.Point(32, 220)
+    $txtKey.Size = New-Object System.Drawing.Size(600, 35)
+    $txtKey.BackColor = [System.Drawing.Color]::FromArgb(45, 51, 59)
+    $txtKey.ForeColor = [System.Drawing.Color]::White
+    $txtKey.BorderStyle = "None"
+    $txtKey.Font = $codeFont
+    $txtKey.Padding = New-Object System.Windows.Forms.Padding(8, 5, 8, 5)
+    $form.Controls.Add($txtKey)
 
-# 输入框
-$txtKey = New-Object System.Windows.Forms.TextBox
-$txtKey.Location = New-Object System.Drawing.Point(32, 220)
-$txtKey.Size = New-Object System.Drawing.Size(600, 35)
-$txtKey.BackColor = [System.Drawing.Color]::FromArgb(45, 51, 59)
-$txtKey.ForeColor = [System.Drawing.Color]::White
-$txtKey.BorderStyle = "None"
-$txtKey.Font = $codeFont
-$txtKey.Padding = New-Object System.Windows.Forms.Padding(8, 5, 8, 5)
-$form.Controls.Add($txtKey)
+    # 取消按钮
+    $btnCancel = New-Object System.Windows.Forms.Button
+    $btnCancel.Text = "取消"
+    $btnCancel.Size = New-Object System.Drawing.Size(120, 38)
+    $btnCancel.Location = New-Object System.Drawing.Point(390, 320)
+    $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58, 67, 80)
+    $btnCancel.ForeColor = [System.Drawing.Color]::White
+    $btnCancel.FlatStyle = "Flat"
+    $btnCancel.FlatAppearance.BorderSize = 0
+    $btnCancel.Cursor = "Hand"
+    $btnCancel.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel })
+    $form.Controls.Add($btnCancel)
 
-# 取消按钮
-$btnCancel = New-Object System.Windows.Forms.Button
-$btnCancel.Text = "取消"
-$btnCancel.Size = New-Object System.Drawing.Size(120, 38)
-$btnCancel.Location = New-Object System.Drawing.Point(390, 320)
-$btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58, 67, 80)
-$btnCancel.ForeColor = [System.Drawing.Color]::White
-$btnCancel.FlatStyle = "Flat"
-$btnCancel.FlatAppearance.BorderSize = 0
-$btnCancel.Cursor = "Hand"
-$btnCancel.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel })
-$form.Controls.Add($btnCancel)
+    # 确认按钮
+    $btnOk = New-Object System.Windows.Forms.Button
+    $btnOk.Text = "确认"
+    $btnOk.Size = New-Object System.Drawing.Size(120, 38)
+    $btnOk.Location = New-Object System.Drawing.Point(520, 320)
+    $btnOk.BackColor = [System.Drawing.Color]::FromArgb(90, 160, 255)
+    $btnOk.ForeColor = [System.Drawing.Color]::White
+    $btnOk.FlatStyle = "Flat"
+    $btnOk.FlatAppearance.BorderSize = 0
+    $btnOk.Cursor = "Hand"
+    $btnOk.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::OK })
+    $form.Controls.Add($btnOk)
 
-# 确认按钮
-$btnOk = New-Object System.Windows.Forms.Button
-$btnOk.Text = "确认"
-$btnOk.Size = New-Object System.Drawing.Size(120, 38)
-$btnOk.Location = New-Object System.Drawing.Point(520, 320)
-$btnOk.BackColor = [System.Drawing.Color]::FromArgb(90, 160, 255)
-$btnOk.ForeColor = [System.Drawing.Color]::White
-$btnOk.FlatStyle = "Flat"
-$btnOk.FlatAppearance.BorderSize = 0
-$btnOk.Cursor = "Hand"
-$btnOk.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::OK })
-$form.Controls.Add($btnOk)
+    # 按钮悬停效果
+    $btnOk.Add_MouseEnter({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(110, 180, 255) })
+    $btnOk.Add_MouseLeave({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(90, 160, 255) })
+    $btnCancel.Add_MouseEnter({ $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(78, 87, 100) })
+    $btnCancel.Add_MouseLeave({ $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58, 67, 80) })
 
-# 按钮悬停效果
-$btnOk.Add_MouseEnter({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(110, 180, 255) })
-$btnOk.Add_MouseLeave({ $btnOk.BackColor = [System.Drawing.Color]::FromArgb(90, 160, 255) })
-$btnCancel.Add_MouseEnter({ $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(78, 87, 100) })
-$btnCancel.Add_MouseLeave({ $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58, 67, 80) })
+    $form.AcceptButton = $btnOk
+    $form.CancelButton = $btnCancel
 
-$form.AcceptButton = $btnOk
-$form.CancelButton = $btnCancel
-
-# 显示窗口
-$result = $form.ShowDialog()
-
-if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-    $key = $txtKey.Text.Trim()
-    if ([string]::IsNullOrWhiteSpace($key)) {
-        [System.Windows.Forms.MessageBox]::Show("请输入激活码", "提示", "OK", "Information")
+    # 显示窗口并等待操作
+    $result = $form.ShowDialog()
+    
+    # 1. 如果点击了取消，直接退出整个程序
+    if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
+        $form.Dispose()
         exit
     }
-    
-    try {
-        $body = @{ key = $key }
-        $response = Invoke-WebRequest -Uri $ApiUrl -Method Post -Body $body -Headers $reqHeaders -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-        $data = $response.Content | ConvertFrom-Json
+
+    # 2. 如果点击了确认
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        $key = $txtKey.Text.Trim()
         
-        if ($data.code -eq 1) {
-            $msg = "激活成功！`r`n对应游戏：{0}`r`n补丁文件：{1}`r`n授权已生效。" -f $data.data.game_name, $data.data.lua_filename
-            [System.Windows.Forms.MessageBox]::Show($msg, "激活成功", "OK", "Information")
-        } else {
-            [System.Windows.Forms.MessageBox]::Show("激活失败：`r`n" + $data.msg, "激活失败", "OK", "Error")
+        if ([string]::IsNullOrWhiteSpace($key)) {
+            [System.Windows.Forms.MessageBox]::Show("请输入激活码", "提示", "OK", "Information")
+            $form.Dispose()
+            continue
         }
-    } catch {
-        $err = $_.Exception.Message
-        [System.Windows.Forms.MessageBox]::Show("连接验证服务器失败，请检查网络。`r`n错误：" + $err, "网络错误", "OK", "Error")
+        
+        # ====== 精准读取 Steam 安装路径 ======
+        $steamid = $null
+        $steamPath = $null
+        $steamProc = Get-Process -Name "steam" -ErrorAction SilentlyContinue
+        
+        if (-not $steamProc) {
+            [System.Windows.Forms.MessageBox]::Show("未检测到 Steam 正在运行。`r`n请先登录您的 Steam 客户端，再重新点击确认。", "未登录 Steam", "OK", "Information")
+            $form.Dispose()
+            continue
+        }
+        
+        # 1. 从注册表读取 Steam 的安装位置
+        try {
+            $regPath = "HKCU:\Software\Valve\Steam"
+            $steamPath = (Get-ItemProperty -Path $regPath -Name "SteamPath" -ErrorAction SilentlyContinue).SteamPath
+            
+            if ([string]::IsNullOrWhiteSpace($steamPath)) {
+                $regPath = "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam"
+                $steamPath = (Get-ItemProperty -Path $regPath -Name "InstallPath" -ErrorAction SilentlyContinue).InstallPath
+            }
+        } catch {}
+        
+        # 2. 注册表读取失败，备选常见路径
+        if ([string]::IsNullOrWhiteSpace($steamPath)) {
+            $commonPaths = @(
+                "C:\Program Files (x86)\Steam",
+                "D:\Program Files (x86)\Steam",
+                "D:\Steam",
+                "E:\Steam",
+                "C:\Steam"
+            )
+            foreach ($p in $commonPaths) {
+                if (Test-Path "$p\config\loginusers.vdf") {
+                    $steamPath = $p
+                    break
+                }
+            }
+        }
+        
+        if ([string]::IsNullOrWhiteSpace($steamPath)) {
+            [System.Windows.Forms.MessageBox]::Show("无法识别 Steam 安装位置。`r`n请确保 Steam 已正确安装并登录。", "路径错误", "OK", "Error")
+            $form.Dispose()
+            continue
+        }
+
+        $vdfPath = Join-Path $steamPath "config\loginusers.vdf"
+        if (-not (Test-Path $vdfPath)) {
+            [System.Windows.Forms.MessageBox]::Show("没有读取到 Steam 的登录文件 (loginusers.vdf)。`r`n请确保已登录 Steam，并尝试【右键】此激活工具，选择""以管理员身份运行""。", "读取 Steam 失败", "OK", "Error")
+            $form.Dispose()
+            continue
+        }
+
+        # 4. 读取账号 ID 【重点修正：精准查找 MostRecent 对应的账号】
+        try {
+            $vdfContent = Get-Content $vdfPath -Raw
+            # 逻辑：查找带数字的ID区块，区块内有 "MostRecent" "1" 标记，代表当前登录账号
+            if ($vdfContent -match '"(\d+)"\s*\{[^}]*"MostRecent"\s*"1"') {
+                $steamid = $matches[1]
+            }
+        } catch {}
+        
+        if ([string]::IsNullOrWhiteSpace($steamid)) {
+            [System.Windows.Forms.MessageBox]::Show("获取当前登录的 Steam 账号 ID 失败。`r`n请确认您在客户端中已成功登录，并将此账号标记为【记住密码】。", "读取 ID 失败", "OK", "Error")
+            $form.Dispose()
+            continue
+        }
+
+        try {
+            $getUrl = $ApiUrl + "?key=" + [System.Web.HttpUtility]::UrlEncode($key) + "&steamid=" + $steamid
+            $responseText = curl.exe -s $getUrl
+            
+            try {
+                $data = $responseText | ConvertFrom-Json
+            } catch {
+                [System.Windows.Forms.MessageBox]::Show("服务器返回错误，可能由于网络波动导致。`r`n" + $responseText, "网络响应异常", "OK", "Error")
+                $form.Dispose()
+                continue
+            }
+
+            if ($data.code -eq 1) {
+                $luaFileName = $data.lua
+                $luaFolder = Join-Path $steamPath "config\lua"
+                
+                if (-not (Test-Path $luaFolder)) {
+                    New-Item -ItemType Directory -Force -Path $luaFolder | Out-Null
+                }
+
+                try {
+                    $luaBaseUrl = "http://47.100.104.45/lua/"
+                    $luaFullUrl = $luaBaseUrl + $luaFileName
+                    $luaLocalPath = Join-Path $luaFolder $luaFileName
+
+                    $webClient = New-Object System.Net.WebClient
+                    $webClient.DownloadFile($luaFullUrl, $luaLocalPath)
+                    
+                    $formSuccess = New-Object System.Windows.Forms.Form
+                    $formSuccess.Text = "激活成功"
+                    $formSuccess.Size = New-Object System.Drawing.Size(380, 180)
+                    $formSuccess.StartPosition = "CenterScreen"
+                    $formSuccess.BackColor = [System.Drawing.Color]::FromArgb(30, 35, 42)
+                    $formSuccess.ForeColor = [System.Drawing.Color]::White
+                    $formSuccess.FormBorderStyle = "FixedDialog"
+                    $formSuccess.MaximizeBox = $false
+                    $formSuccess.MinimizeBox = $false
+                    $formSuccess.Font = $defFont
+                    $formSuccess.TopMost = $true
+
+                    $gameName = $data.data.game_name
+                    $lblSuccess = New-Object System.Windows.Forms.Label
+                    $lblSuccess.Text = "激活成功！`r`n`r`n" + $gameName
+                    $lblSuccess.Location = New-Object System.Drawing.Point(45, 30)
+                    $lblSuccess.Size = New-Object System.Drawing.Size(280, 80)
+                    $lblSuccess.ForeColor = [System.Drawing.Color]::White
+                    $lblSuccess.Font = $defFont
+                    $formSuccess.Controls.Add($lblSuccess)
+
+                    $btnOkSuccess = New-Object System.Windows.Forms.Button
+                    $btnOkSuccess.Text = "确定"
+                    $btnOkSuccess.Size = New-Object System.Drawing.Size(100, 36)
+                    $btnOkSuccess.Location = New-Object System.Drawing.Point(140, 110)
+                    $btnOkSuccess.BackColor = [System.Drawing.Color]::FromArgb(90, 160, 255)
+                    $btnOkSuccess.ForeColor = [System.Drawing.Color]::White
+                    $btnOkSuccess.FlatStyle = "Flat"
+                    $btnOkSuccess.FlatAppearance.BorderSize = 0
+                    $btnOkSuccess.Cursor = "Hand"
+                    $btnOkSuccess.Add_MouseEnter({ $btnOkSuccess.BackColor = [System.Drawing.Color]::FromArgb(110, 180, 255) })
+                    $btnOkSuccess.Add_MouseLeave({ $btnOkSuccess.BackColor = [System.Drawing.Color]::FromArgb(90, 160, 255) })
+                    $btnOkSuccess.Add_Click({ $formSuccess.Close() })
+                    $formSuccess.Controls.Add($btnOkSuccess)
+
+                    $formSuccess.ShowDialog()
+                    $form.Dispose()
+                    break
+
+                } catch {
+                    [System.Windows.Forms.MessageBox]::Show("激活成功，但 Lua 补丁下载失败。`r`n请确保阿里云服务器 `/lua/` 文件夹里有对应的文件。`r`n错误：" + $_.Exception.Message, "下载提醒", "OK", "Warning")
+                    $form.Dispose()
+                    break
+                }
+            } else {
+                [System.Windows.Forms.MessageBox]::Show("激活失败：`r`n" + $data.msg, "激活失败", "OK", "Error")
+                $form.Dispose()
+                continue
+            }
+        } catch {
+            $err = $_.Exception.Message
+            [System.Windows.Forms.MessageBox]::Show("连接验证服务器失败，请检查网络。`r`n错误：" + $err, "网络错误", "OK", "Error")
+            $form.Dispose()
+            continue
+        }
     }
 }
