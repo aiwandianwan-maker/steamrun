@@ -23,10 +23,9 @@ try {
 }
 
 while ($true) {
-    # ============= 【UI 样式：仿 Steam 激活码窗口】 =============
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "输入您的产品激活码"
-    $form.Size = New-Object System.Drawing.Size(580, 380) # 【修改点】高度从 320 增加到 380
+    $form.Size = New-Object System.Drawing.Size(580, 380)
     $form.StartPosition = "CenterScreen"
     $form.BackColor = [System.Drawing.Color]::FromArgb(35, 39, 42)
     $form.ForeColor = [System.Drawing.Color]::White
@@ -36,7 +35,6 @@ while ($true) {
     $form.Font = $defFont
     $form.TopMost = $true
 
-    # 标题
     $lblTitle = New-Object System.Windows.Forms.Label
     $lblTitle.Text = "输入您的产品激活码"
     $lblTitle.Font = $titleFont
@@ -45,16 +43,14 @@ while ($true) {
     $lblTitle.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
     $form.Controls.Add($lblTitle)
 
-    # 说明
     $lblDesc = New-Object System.Windows.Forms.Label
-    $lblDesc.Text = "输入激活码完成补丁授权绑定，激活后将与当前 Steam 账号永久绑定。`r`n请确保输入的激活码与您购买的补丁产品一致。"
+    $lblDesc.Text = "输入激活码完成游戏授权绑定，激活后将与当前 Steam 账号永久绑定。`r`n请确保输入的激活码与您购买的游戏产品一致。"
     $lblDesc.Location = New-Object System.Drawing.Point(30, 65)
     $lblDesc.Size = New-Object System.Drawing.Size(500, 45)
     $lblDesc.ForeColor = [System.Drawing.Color]::FromArgb(180, 188, 200)
     $lblDesc.Font = New-Object System.Drawing.Font($defFont.FontFamily, 10)
     $form.Controls.Add($lblDesc)
 
-    # 示例提示
     $lblDemo = New-Object System.Windows.Forms.Label
     $lblDemo.Text = "激活码格式示例"
     $lblDemo.Location = New-Object System.Drawing.Point(30, 135)
@@ -71,10 +67,9 @@ while ($true) {
     $lblDemo2.Font = New-Object System.Drawing.Font($defFont.FontFamily, 10)
     $form.Controls.Add($lblDemo2)
 
-    # 输入框
     $txtKey = New-Object System.Windows.Forms.TextBox
     $txtKey.Location = New-Object System.Drawing.Point(30, 200)
-    $txtKey.Size = New-Object System.Drawing.Size(500, 35)
+    $txtKey.Size = New-Object System.Drawing.Size(520, 40) # 【修改点】宽度从500增加到520，高度从35增加到40
     $txtKey.BackColor = [System.Drawing.Color]::FromArgb(47, 53, 58)
     $txtKey.ForeColor = [System.Drawing.Color]::White
     $txtKey.BorderStyle = "None"
@@ -82,11 +77,10 @@ while ($true) {
     $txtKey.Padding = New-Object System.Windows.Forms.Padding(8, 5, 8, 5)
     $form.Controls.Add($txtKey)
 
-    # 取消按钮
     $btnCancel = New-Object System.Windows.Forms.Button
     $btnCancel.Text = "取消"
     $btnCancel.Size = New-Object System.Drawing.Size(100, 36)
-    $btnCancel.Location = New-Object System.Drawing.Point(310, 290) # 【修改点】Y坐标从260改为290
+    $btnCancel.Location = New-Object System.Drawing.Point(310, 290)
     $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(58, 67, 80)
     $btnCancel.ForeColor = [System.Drawing.Color]::White
     $btnCancel.FlatStyle = "Flat"
@@ -95,11 +89,10 @@ while ($true) {
     $btnCancel.Add_Click({ $form.DialogResult = [System.Windows.Forms.DialogResult]::Cancel })
     $form.Controls.Add($btnCancel)
 
-    # 确认按钮
     $btnOk = New-Object System.Windows.Forms.Button
     $btnOk.Text = "确认"
     $btnOk.Size = New-Object System.Drawing.Size(100, 36)
-    $btnOk.Location = New-Object System.Drawing.Point(430, 290) # 【修改点】Y坐标从260改为290
+    $btnOk.Location = New-Object System.Drawing.Point(430, 290)
     $btnOk.BackColor = [System.Drawing.Color]::FromArgb(62, 107, 200)
     $btnOk.ForeColor = [System.Drawing.Color]::White
     $btnOk.FlatStyle = "Flat"
@@ -205,10 +198,9 @@ while ($true) {
                     $webClient = New-Object System.Net.WebClient
                     $webClient.DownloadFile($luaFullUrl, $luaLocalPath)
 
-                    # 【修正点】：直接获取 API 返回的游戏名，不再强制设置默认值
                     $gameName = $data.data.game_name
-                    
-                    # ============= 【UI 样式：仿 Steam 激活成功弹窗】 =============
+                    if ([string]::IsNullOrWhiteSpace($gameName)) { $gameName = "已激活补丁" }
+
                     $formSuccess = New-Object System.Windows.Forms.Form
                     $formSuccess.Size = New-Object System.Drawing.Size(480, 220)
                     $formSuccess.StartPosition = "CenterScreen"
