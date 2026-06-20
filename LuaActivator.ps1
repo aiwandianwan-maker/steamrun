@@ -127,8 +127,18 @@ while ($true) {
         $steamid = $null
         $steamPath = $null
         $steamProc = Get-Process -Name "steam" -ErrorAction SilentlyContinue
+        
+        # 【修复漏洞1】：检查进程是否存在
         if (-not $steamProc) {
             [System.Windows.Forms.MessageBox]::Show("未检测到 Steam 正在运行。`r`n请先登录您的 Steam 客户端，再重新点击确认。", "未登录 Steam", "OK", "Information")
+            $form.Dispose()
+            continue
+        }
+
+        # 【修复漏洞2】：检测 Steam 是否处于“未登录”的等待界面
+        $steamWinTitle = $steamProc.MainWindowTitle
+        if ($steamWinTitle -match "Log In|Login|登录|Steam$") {
+            [System.Windows.Forms.MessageBox]::Show("检测到 Steam 正处于登录界面。`r`n请先完成 Steam 账号登录，再重新点击确认。", "Steam 未登录", "OK", "Information")
             $form.Dispose()
             continue
         }
@@ -198,7 +208,6 @@ while ($true) {
                     $webClient = New-Object System.Net.WebClient
                     $webClient.DownloadFile($luaFullUrl, $luaLocalPath)
 
-                    # 【核心修复点】：把 $data.data.game_name 改为 $data.game_name
                     $gameName = $data.game_name
                     if ([string]::IsNullOrWhiteSpace($gameName)) { $gameName = "已激活补丁" }
 
