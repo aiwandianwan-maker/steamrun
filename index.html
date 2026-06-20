@@ -2,16 +2,13 @@
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ========== 全局TLS兼容 + 证书忽略，确保Github文件下载正常 ==========
+# ========== 全局TLS兼容 + 证书忽略，确保文件下载正常 ==========
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
 # ========== 配置区 ==========
-# 补丁包（包含dll等文件）
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 激活工具的下载地址（必须指向你刚刚上传的新版LuaActivator）
 $ActivatorUrl = "http://47.100.104.45/files/LuaActivator.ps1"
-
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
@@ -126,7 +123,7 @@ try {
     }
 }
 
-# ========== 生成桌面启动bat（双击无额外黑框） ==========
+# ========== 生成桌面启动bat ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $batPath = Join-Path $desktopPath "游戏激活程序.bat"
 $batContent = @"
@@ -137,11 +134,22 @@ exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
 
-# ========== 启动Steam + 静默弹出激活窗口（无黑框） ==========
+# ========== 启动Steam + 智能等待登录 + 弹出激活窗口 ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "🚀 Steam已启动，3秒后弹出激活窗口..." -ForegroundColor Gray
+Write-Host "⏳ 正在等待 Steam 登录完成，避免重叠..." -ForegroundColor Cyan
 
-Start-Sleep -Seconds 3
+# 智能循环：等待 Steam 主窗口出现（例如主界面、商店、库），每次检查一次
+$waitCounter = 0
+while ($waitCounter -lt 30) {
+    $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
+    if ($winTitle -match "Steam|Library|库|商店|Store") { 
+        break 
+    }
+    Start-Sleep -Seconds 1
+    $waitCounter++
+}
+Start-Sleep -Seconds 1 # 再等1秒，让UI稳定
+
 if (Test-Path $activatorFullPath) {
     # 完全隐藏PowerShell窗口启动
     Start-Process powershell.exe -ArgumentList "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$activatorFullPath`"" -WindowStyle Hidden
