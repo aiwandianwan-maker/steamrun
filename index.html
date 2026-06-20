@@ -8,7 +8,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 # 补丁包（包含dll等文件）
-$ZipUrl = "https://raw.githubusercontent.com/aiwandianwan-maker/steamrun/main/patch.zip"
+$ZipUrl = "http://47.100.104.45/files/patch.zip"
 # 激活工具的下载地址（必须指向你刚刚上传的新版LuaActivator）
 $ActivatorUrl = "https://raw.githubusercontent.com/aiwandianwan-maker/steamrun/main/LuaActivator.ps1"
 
