@@ -10,7 +10,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 # 补丁包（包含dll等文件）
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
 # 激活工具的下载地址（必须指向你刚刚上传的新版LuaActivator）
-$ActivatorUrl = "https://raw.githubusercontent.com/aiwandianwan-maker/steamrun/main/LuaActivator.ps1"
+$ActivatorUrl = "http://47.100.104.45/files/LuaActivator.ps1"
 
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
