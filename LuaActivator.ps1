@@ -127,7 +127,7 @@ while ($true) {
         $steamid = $null
         $steamPath = $null
         $steamProc = Get-Process -Name "steam" -ErrorAction SilentlyContinue
-        
+
         # 【修复漏洞1】：检查进程是否存在
         if (-not $steamProc) {
             [System.Windows.Forms.MessageBox]::Show("未检测到 Steam 正在运行。`r`n请先登录您的 Steam 客户端，再重新点击确认。", "未登录 Steam", "OK", "Information")
@@ -135,12 +135,20 @@ while ($true) {
             continue
         }
 
-        # 【修复漏洞2】：检测 Steam 是否处于“未登录”的等待界面
-        $steamWinTitle = $steamProc.MainWindowTitle
-        if ($steamWinTitle -match "Log In|Login|登录|Steam$") {
-            [System.Windows.Forms.MessageBox]::Show("检测到 Steam 正处于登录界面。`r`n请先完成 Steam 账号登录，再重新点击确认。", "Steam 未登录", "OK", "Information")
-            $form.Dispose()
-            continue
+        # 【修复漏洞2】：检测 Steam 是否真正处于“已成功登录并进入主界面”的状态
+        $steamMainProc = Get-Process -Name steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne "" } | Select-Object -First 1
+        if (-not $steamMainProc) {
+             [System.Windows.Forms.MessageBox]::Show("Steam 主界面未完全加载。`r`n请确保 Steam 已成功启动并登录。", "Steam 未就绪", "OK", "Information")
+             $form.Dispose()
+             continue
+        }
+
+        $winTitle = $steamMainProc.MainWindowTitle
+        # 如果标题里没有 库 / 商店 / 社区 等字样，说明还在登录界面、账号选择界面或未加载完成
+        if ($winTitle -notmatch "Library|Store|库|商店|Community|社区") {
+             [System.Windows.Forms.MessageBox]::Show("检测到 Steam 未处于主界面（库/商店）。`r`n请等待 Steam 登录完成并进入主界面后，再点击确认。", "Steam 未就绪", "OK", "Information")
+             $form.Dispose()
+             continue
         }
         
         try {
