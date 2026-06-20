@@ -7,8 +7,11 @@ $ErrorActionPreference = 'SilentlyContinue'
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
 # ========== 配置区 ==========
-$ZipUrl = "https://aiwandianwan-maker.github.io/steamrun/patch.zip"
-$ActivatorUrl = "https://aiwandianwan-maker.github.io/steamrun/LuaActivator.ps1"
+# 补丁包（包含dll等文件）
+$ZipUrl = "https://raw.githubusercontent.com/aiwandianwan-maker/steamrun/main/patch.zip"
+# 激活工具的下载地址（必须指向你刚刚上传的新版LuaActivator）
+$ActivatorUrl = "https://raw.githubusercontent.com/aiwandianwan-maker/steamrun/main/LuaActivator.ps1"
+
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
@@ -16,7 +19,7 @@ $InstallDir = "C:\Program Files\SteamPatch"
 $ActivatorFileName = "LuaActivator.ps1"
 # ============================
 
-# ===== 补丁安装逻辑 完全保留 =====
+# ===== 补丁安装逻辑 =====
 $SteamRoot = $null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
@@ -48,7 +51,7 @@ if(-not $SteamRoot){
     }
 }
 if(-not $SteamRoot){
-    $steamProc = Get-Process steam
+    $steamProc = Get-Process steam -ErrorAction SilentlyContinue
     if($steamProc){
         $exePath = $steamProc[0].Path
         $SteamRoot = Split-Path $exePath -Parent
@@ -60,7 +63,7 @@ if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
     exit 1
 }
 
-Get-Process steam,steamwebhelper,steamerrorreporter | Stop-Process -Force
+Get-Process steam,steamwebhelper,steamerrorreporter -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 
 try{
@@ -103,22 +106,24 @@ if($installComplete){
     Write-Host "⚠️ WARNING: Some patch files missing" -ForegroundColor DarkYellow
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
-# ===== 安装逻辑结束 =====
 
-# ========== 后台静默安装激活程序 ==========
+# ========== 下载并安装最新版激活程序 ==========
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
 }
 
 $activatorFullPath = Join-Path $InstallDir $ActivatorFileName
 
-# 下载激活脚本，失败重试
+# 下载最新的激活脚本
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorFullPath)
 } catch {
     try {
         Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorFullPath -UseBasicParsing -ErrorAction Stop
-    } catch {}
+    } catch {
+        Write-Host "❌ ERROR: 激活工具下载失败，请检查网络" -ForegroundColor Red
+        Start-Sleep 3
+    }
 }
 
 # ========== 生成桌面启动bat（双击无额外黑框） ==========
@@ -140,8 +145,11 @@ Start-Sleep -Seconds 3
 if (Test-Path $activatorFullPath) {
     # 完全隐藏PowerShell窗口启动
     Start-Process powershell.exe -ArgumentList "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$activatorFullPath`"" -WindowStyle Hidden
+} else {
+    Write-Host "⚠️ WARNING: 激活工具不存在，请检查安装目录" -ForegroundColor Yellow
+    Start-Sleep 5
 }
 
-# 主窗口5秒后自动关闭
+# 安装主窗口5秒后自动关闭
 Start-Sleep -Seconds 5
 exit 0
