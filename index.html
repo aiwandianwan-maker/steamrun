@@ -1,4 +1,5 @@
 #Requires -RunAsAdministrator
+chcp 65001 > $null
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
@@ -135,7 +136,6 @@ $batContent | Out-File $batPath -Encoding Default -Force
 Start-Process "$SteamRoot\steam.exe"
 Write-Host "⏳ Steam已启动，正在等待界面加载..." -ForegroundColor Gray
 
-# 【修改点】加快检测速度，只要检测到包含 Steam 主标题就立刻弹出，不等人点登录
 $waitCounter = 0
 while ($waitCounter -lt 15) {
     $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
@@ -152,6 +152,5 @@ if (Test-Path $activatorFullPath) {
     Start-Sleep 5
 }
 
-# 5秒后自动关闭这个 PowerShell 黑框窗口
 Start-Sleep -Seconds 5
 exit 0
