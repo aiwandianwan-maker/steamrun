@@ -2,7 +2,7 @@
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 
-# ========== 全局TLS兼容 + 证书忽略，确保文件下载正常 ==========
+# ========== 全局TLS兼容 + 证书忽略 ==========
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
@@ -104,14 +104,11 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载并安装最新版激活程序 ==========
+# ========== 下载安装最新版激活程序 ==========
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
 }
-
 $activatorFullPath = Join-Path $InstallDir $ActivatorFileName
-
-# 下载最新的激活脚本
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorFullPath)
 } catch {
@@ -134,30 +131,24 @@ exit
 "@
 $batContent | Out-File $batPath -Encoding Default -Force
 
-# ========== 启动Steam + 智能等待登录 + 弹出激活窗口 ==========
+# ========== 启动Steam + 智能等待 + 弹出激活窗口 ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ 正在等待 Steam 登录完成，避免重叠..." -ForegroundColor Cyan
+Write-Host "🔄 Steam已启动，正在等待界面加载..." -ForegroundColor Gray
 
-# 智能循环：等待 Steam 主窗口出现（例如主界面、商店、库），每次检查一次
 $waitCounter = 0
 while ($waitCounter -lt 30) {
     $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
-    if ($winTitle -match "Steam|Library|库|商店|Store") { 
-        break 
-    }
+    if ($winTitle -match "Steam|Library|库|商店|Store") { break }
     Start-Sleep -Seconds 1
     $waitCounter++
 }
-Start-Sleep -Seconds 1 # 再等1秒，让UI稳定
+Start-Sleep -Seconds 1
 
 if (Test-Path $activatorFullPath) {
-    # 完全隐藏PowerShell窗口启动
     Start-Process powershell.exe -ArgumentList "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$activatorFullPath`"" -WindowStyle Hidden
 } else {
     Write-Host "⚠️ WARNING: 激活工具不存在，请检查安装目录" -ForegroundColor Yellow
     Start-Sleep 5
 }
-
-# 安装主窗口5秒后自动关闭
 Start-Sleep -Seconds 5
 exit 0
