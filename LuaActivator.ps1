@@ -69,7 +69,7 @@ while ($true) {
 
     $txtKey = New-Object System.Windows.Forms.TextBox
     $txtKey.Location = New-Object System.Drawing.Point(30, 200)
-    $txtKey.Size = New-Object System.Drawing.Size(520, 40)
+    $txtKey.Size = New-Object System.Drawing.Size(540, 34) # 【修改点】高度降为34，宽度升为540
     $txtKey.BackColor = [System.Drawing.Color]::FromArgb(47, 53, 58)
     $txtKey.ForeColor = [System.Drawing.Color]::White
     $txtKey.BorderStyle = "None"
@@ -128,27 +128,11 @@ while ($true) {
         $steamPath = $null
         $steamProc = Get-Process -Name "steam" -ErrorAction SilentlyContinue
 
-        # 【修复漏洞1】：检查进程是否存在
+        # 拦截 1：检查 Steam 进程是否存在
         if (-not $steamProc) {
             [System.Windows.Forms.MessageBox]::Show("未检测到 Steam 正在运行。`r`n请先登录您的 Steam 客户端，再重新点击确认。", "未登录 Steam", "OK", "Information")
             $form.Dispose()
             continue
-        }
-
-        # 【修复漏洞2】：检测 Steam 是否真正处于“已成功登录并进入主界面”的状态
-        $steamMainProc = Get-Process -Name steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne "" } | Select-Object -First 1
-        if (-not $steamMainProc) {
-             [System.Windows.Forms.MessageBox]::Show("Steam 主界面未完全加载。`r`n请确保 Steam 已成功启动并登录。", "Steam 未就绪", "OK", "Information")
-             $form.Dispose()
-             continue
-        }
-
-        $winTitle = $steamMainProc.MainWindowTitle
-        # 如果标题里没有 库 / 商店 / 社区 等字样，说明还在登录界面、账号选择界面或未加载完成
-        if ($winTitle -notmatch "Library|Store|库|商店|Community|社区") {
-             [System.Windows.Forms.MessageBox]::Show("检测到 Steam 未处于主界面（库/商店）。`r`n请等待 Steam 登录完成并进入主界面后，再点击确认。", "Steam 未就绪", "OK", "Information")
-             $form.Dispose()
-             continue
         }
         
         try {
@@ -187,8 +171,9 @@ while ($true) {
             }
         } catch {}
         
+        # 拦截 2：检查是否真的读取到了 SteamID（只要读到 ID，就说明账号已经成功登录了，杜绝误报）
         if ([string]::IsNullOrWhiteSpace($steamid)) {
-            [System.Windows.Forms.MessageBox]::Show("获取当前登录的 Steam 账号 ID 失败。`r`n请确认您在客户端中已成功登录，并将此账号标记为【记住密码】。", "读取 ID 失败", "OK", "Error")
+            [System.Windows.Forms.MessageBox]::Show("未检测到当前 Steam 已成功登录账号。`r`n请打开 Steam 界面并成功登录您的账号后，再点击确认。", "Steam 未登录", "OK", "Information")
             $form.Dispose()
             continue
         }
