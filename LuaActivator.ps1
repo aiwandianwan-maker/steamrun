@@ -69,7 +69,7 @@ while ($true) {
 
     $txtKey = New-Object System.Windows.Forms.TextBox
     $txtKey.Location = New-Object System.Drawing.Point(30, 200)
-    $txtKey.Size = New-Object System.Drawing.Size(540, 34) # 【修改点】高度降为34，宽度升为540
+    $txtKey.Size = New-Object System.Drawing.Size(540, 34)
     $txtKey.BackColor = [System.Drawing.Color]::FromArgb(47, 53, 58)
     $txtKey.ForeColor = [System.Drawing.Color]::White
     $txtKey.BorderStyle = "None"
@@ -134,6 +134,23 @@ while ($true) {
             $form.Dispose()
             continue
         }
+
+        # =====================================================================
+        # 【拦截 2：全新精准校验，只有真正进入主界面才能激活！】
+        # =====================================================================
+        $steamMain = Get-Process -Name steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1
+        if ($steamMain) {
+            $winTitle = $steamMain.MainWindowTitle
+            # 识别“账号选择界面”或“登录界面”的特征
+            # 中文版：无文字则是 "Steam"，未选择账号时是 "谁要玩游戏？" 或 "Steam"
+            # 英文版：通常是 "Steam" 或 "Log In"
+            if ($winTitle -match "^Steam$|登录|Login|谁要玩游戏|账号选择|Select Account|Sign In") {
+                [System.Windows.Forms.MessageBox]::Show("检测到 Steam 账号选择界面或登录界面。`r`n请点击您的账号进入【主界面（库/商店）】后，再点击确认。", "Steam 未登录", "OK", "Information")
+                $form.Dispose()
+                continue
+            }
+        }
+        # =====================================================================
         
         try {
             $regPath = "HKCU:\Software\Valve\Steam"
@@ -171,9 +188,8 @@ while ($true) {
             }
         } catch {}
         
-        # 拦截 2：检查是否真的读取到了 SteamID（只要读到 ID，就说明账号已经成功登录了，杜绝误报）
         if ([string]::IsNullOrWhiteSpace($steamid)) {
-            [System.Windows.Forms.MessageBox]::Show("未检测到当前 Steam 已成功登录账号。`r`n请打开 Steam 界面并成功登录您的账号后，再点击确认。", "Steam 未登录", "OK", "Information")
+            [System.Windows.Forms.MessageBox]::Show("未检测到当前 Steam 已成功登录账号。`r`n请确保您已在 Steam 客户端成功登录并进入主界面。", "Steam 未登录", "OK", "Information")
             $form.Dispose()
             continue
         }
