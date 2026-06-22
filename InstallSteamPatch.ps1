@@ -9,16 +9,17 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 【修改点 1】：下载地址改为刚才上传的 exe 文件
+# 【下载地址】：直接下载我们刚刚上传到宝塔 files 目录的 EXE
 $ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-$InstallDir = "C:\Program Files\SteamPatch"
-$ActivatorFileName = "游戏激活程序.exe" # 修改为 exe
+# 【核心修改点1】：安装目录直接指定为【当前用户的桌面】
+$InstallDir = [Environment]::GetFolderPath("Desktop")
+$ActivatorFileName = "游戏激活程序.exe"
 # ============================
 
-# ===== 补丁安装逻辑 (保留不变) =====
+# ===== 补丁安装逻辑 (保持不变) =====
 $SteamRoot = $null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
@@ -106,10 +107,7 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载安装最新版激活程序 (不生成bat，生成exe快捷方式) ==========
-if(-not (Test-Path $InstallDir)){
-    New-Item $InstallDir -ItemType Directory -Force | Out-Null
-}
+# ========== 下载安装最新版激活程序 (直接放到桌面) ==========
 $activatorExePath = Join-Path $InstallDir $ActivatorFileName
 
 # 下载最新的 EXE 激活程序
@@ -124,18 +122,7 @@ try {
     }
 }
 
-# ========== 【核心修改点】生成桌面快捷方式 (.lnk)，替代原来的 .bat ==========
-$desktopPath = [Environment]::GetFolderPath("Desktop")
-$shortcutPath = Join-Path $desktopPath "游戏激活程序.lnk"
-
-try {
-    $WshShell = New-Object -comObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-    $Shortcut.TargetPath = $activatorExePath
-    $Shortcut.Save()
-} catch {}
-
-# ========== 启动Steam + 等待界面 + 自动弹出 EXE 激活程序 ==========
+# ========== 启动Steam + 等待界面 + 第一次自动弹出桌面的 EXE ==========
 Start-Process "$SteamRoot\steam.exe"
 Write-Host "⏳ Steam已启动，正在等待界面加载..." -ForegroundColor Gray
 
@@ -149,10 +136,10 @@ while ($waitCounter -lt 15) {
 Start-Sleep -Seconds 1
 
 if (Test-Path $activatorExePath) {
-    # 运行那个带图标的 EXE，并且完全隐藏黑框窗口
+    # 运行桌面的 EXE 并隐藏黑框
     Start-Process $activatorExePath -WindowStyle Hidden
 } else {
-    Write-Host "⚠️ WARNING: 激活工具不存在，请检查安装目录" -ForegroundColor Yellow
+    Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
     Start-Sleep 5
 }
 
