@@ -9,17 +9,15 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 【下载地址】：直接下载我们刚刚上传到宝塔 files 目录的 EXE
 $ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-# 【核心修改点1】：安装目录直接指定为【当前用户的桌面】
 $InstallDir = [Environment]::GetFolderPath("Desktop")
 $ActivatorFileName = "游戏激活程序.exe"
 # ============================
 
-# ===== 补丁安装逻辑 (保持不变) =====
+# ===== 补丁安装逻辑 =====
 $SteamRoot = $null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
@@ -109,8 +107,6 @@ Write-Host "=====================================`n" -ForegroundColor Cyan
 
 # ========== 下载安装最新版激活程序 (直接放到桌面) ==========
 $activatorExePath = Join-Path $InstallDir $ActivatorFileName
-
-# 下载最新的 EXE 激活程序
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
 } catch {
@@ -122,22 +118,25 @@ try {
     }
 }
 
-# ========== 启动Steam + 等待界面 + 第一次自动弹出桌面的 EXE ==========
+# ========== 启动Steam + 【核心修正】等待真正的主界面 + 自动弹出 EXE ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，正在等待界面加载..." -ForegroundColor Gray
+Write-Host "⏳ Steam已启动，正在等待【真正进入主界面】..." -ForegroundColor Cyan
 
 $waitCounter = 0
-while ($waitCounter -lt 15) {
+while ($waitCounter -lt 30) {
     $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
-    if ($winTitle -match "Steam") { break }
+    # 【逻辑修复】：只等待进入“库/商店/社区”这些主界面特征，避免在“登录界面”过早启动 EXE
+    if ($winTitle -match "库|商店|Library|Store|社区|Community") {
+        break
+    }
     Start-Sleep -Milliseconds 500
     $waitCounter++
 }
 Start-Sleep -Seconds 1
 
 if (Test-Path $activatorExePath) {
-    # 运行桌面的 EXE 并隐藏黑框
-    Start-Process $activatorExePath -WindowStyle Hidden
+    # 去掉 -WindowStyle Hidden，EXE 自带静默属性，保证启动成功
+    Start-Process $activatorExePath
 } else {
     Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
     Start-Sleep 5
