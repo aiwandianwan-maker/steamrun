@@ -120,7 +120,7 @@ try {
 
 # ========== 启动Steam + 【核心修正】等待真正的主界面 + 自动弹出 EXE ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，正在等待【真正进入主界面】..." -ForegroundColor Cyan
+Write-Host "⏳ Steam已启动，正在等待【请登录steam】..." -ForegroundColor Cyan
 
 $waitCounter = 0
 while ($waitCounter -lt 30) {
