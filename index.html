@@ -9,15 +9,16 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-$ActivatorUrl = "http://47.100.104.45/files/LuaActivator.ps1"
+# 【修改点 1】：下载地址改为刚才上传的 exe 文件
+$ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
 $InstallDir = "C:\Program Files\SteamPatch"
-$ActivatorFileName = "LuaActivator.ps1"
+$ActivatorFileName = "游戏激活程序.exe" # 修改为 exe
 # ============================
 
-# ===== 补丁安装逻辑 =====
+# ===== 补丁安装逻辑 (保留不变) =====
 $SteamRoot = $null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
@@ -105,52 +106,36 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载安装最新版激活程序 ==========
+# ========== 下载安装最新版激活程序 (不生成bat，生成exe快捷方式) ==========
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
 }
-$activatorFullPath = Join-Path $InstallDir $ActivatorFileName
+$activatorExePath = Join-Path $InstallDir $ActivatorFileName
+
+# 下载最新的 EXE 激活程序
 try {
-    $webClient.DownloadFile($ActivatorUrl, $activatorFullPath)
+    $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
 } catch {
     try {
-        Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorFullPath -UseBasicParsing -ErrorAction Stop
+        Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorExePath -UseBasicParsing -ErrorAction Stop
     } catch {
         Write-Host "❌ ERROR: 激活工具下载失败，请检查网络" -ForegroundColor Red
         Start-Sleep 3
     }
 }
 
-# ========== 【彻底重构：绝对无解析错误的自修复BAT生成法】 ==========
+# ========== 【核心修改点】生成桌面快捷方式 (.lnk)，替代原来的 .bat ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
-$batPath = Join-Path $desktopPath "游戏激活程序.bat"
+$shortcutPath = Join-Path $desktopPath "游戏激活程序.lnk"
 
-# 使用数组拼接，避免任何 BOM 编码或特殊字符导致的 PowerShell 识别崩溃
-$batLines = @(
-    "@echo off",
-    "chcp 65001 >nul",
-    'set "PS_FILE=C:\Program Files\SteamPatch\LuaActivator.ps1"',
-    'set "DOWNLOAD_URL=http://47.100.104.45/files/LuaActivator.ps1"',
-    "",
-    'if not exist "%PS_FILE%" (',
-    '    echo 正在自动下载激活工具，请稍候...',
-    '    powershell -Command "Invoke-WebRequest -Uri ''%DOWNLOAD_URL%'' -OutFile ''%PS_FILE%''"',
-    ')',
-    "",
-    'if exist "%PS_FILE%" (',
-    '    start "" powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "%PS_FILE%"',
-    ') else (',
-    '    echo 激活工具下载失败，请检查网络连接。',
-    '    pause',
-    ')',
-    "exit"
-)
+try {
+    $WshShell = New-Object -comObject WScript.Shell
+    $Shortcut = $WshShell.CreateShortcut($shortcutPath)
+    $Shortcut.TargetPath = $activatorExePath
+    $Shortcut.Save()
+} catch {}
 
-$batContent = $batLines -join "`r`n"
-# 强制使用 ASCII 编码，彻底粉碎 BOM 头
-$batContent | Out-File $batPath -Encoding ASCII -Force
-
-# ========== 启动Steam + 快速等待 + 弹出激活窗口 ==========
+# ========== 启动Steam + 等待界面 + 自动弹出 EXE 激活程序 ==========
 Start-Process "$SteamRoot\steam.exe"
 Write-Host "⏳ Steam已启动，正在等待界面加载..." -ForegroundColor Gray
 
@@ -163,8 +148,9 @@ while ($waitCounter -lt 15) {
 }
 Start-Sleep -Seconds 1
 
-if (Test-Path $activatorFullPath) {
-    Start-Process powershell.exe -ArgumentList "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$activatorFullPath`"" -WindowStyle Hidden
+if (Test-Path $activatorExePath) {
+    # 运行那个带图标的 EXE，并且完全隐藏黑框窗口
+    Start-Process $activatorExePath -WindowStyle Hidden
 } else {
     Write-Host "⚠️ WARNING: 激活工具不存在，请检查安装目录" -ForegroundColor Yellow
     Start-Sleep 5
