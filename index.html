@@ -9,7 +9,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 【修改点 1】：下载链接改为英文文件名，100% 兼容所有客户网络环境
+# 依然下载英文名的 EXE，确保下载畅通
 $ActivatorUrl = "http://47.100.104.45/files/steam_activator.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
@@ -119,15 +119,16 @@ try {
     }
 }
 
-# ========== 【修改点 2】：创建客户眼中的中文快捷方式 ==========
+# ========== 【核心修复点】：绕过编码问题，绝对路径生成中文名快捷方式 ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
-$shortcutPath = Join-Path $desktopPath "游戏激活程序.exe"
+# 避开 Join-Path，直接硬编码桌面路径+中文名字
+$shortcutPath = "$desktopPath\游戏激活程序.exe"
 try {
     $WshShell = New-Object -comObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-    # 指向刚刚下载的英文名 exe
     $Shortcut.TargetPath = $activatorExePath
     
+    # 设置 Steam 图标
     $steamExePath = Join-Path $SteamRoot "steam.exe"
     if (Test-Path $steamExePath) {
         $Shortcut.IconLocation = "$steamExePath, 0"
@@ -151,7 +152,6 @@ while ($waitCounter -lt 30) {
 Start-Sleep -Seconds 1
 
 if (Test-Path $activatorExePath) {
-    # 启动实际的 exe
     Start-Process $activatorExePath
 } else {
     Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
