@@ -9,12 +9,12 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 服务端存英文名，避免下载被拦截
+# 服务端存英文名，确保下载绝对通畅
 $ActivatorUrl = "http://47.100.104.45/files/steam_activator.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-# 【核心逻辑恢复】：放入 C:\Program Files\SteamPatch
+# 强制安装到 C 盘固定目录
 $InstallDir = "C:\Program Files\SteamPatch"
 $ActivatorFileName = "steam_activator.exe"
 # ============================
@@ -107,7 +107,7 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载最新版激活程序（放入 C:\Program Files\SteamPatch） ==========
+# ========== 下载最新版激活程序到 C 盘 ==========
 if(-not (Test-Path $InstallDir)){
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
 }
@@ -124,27 +124,30 @@ try {
     }
 }
 
-# ========== 【最终极逻辑】：用中文名快捷方式指向 C 盘的英文 exe ==========
-$desktopPath = [Environment]::GetFolderPath("Desktop")
-# 避开所有解析歧义，直接写死中文名
+# ========== 【精简逻辑】：只在桌面创建中文名快捷方式 ==========
+$desktopPath = [Environment]::GetFolderPath("Desktop").TrimEnd('\')
 $shortcutPath = "$desktopPath\游戏激活程序.exe"
 
 try {
+    # 使用 COM 接口创建快捷方式
     $WshShell = New-Object -comObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($shortcutPath)
     $Shortcut.TargetPath = $activatorExePath
     
-    # 依然完美继承 Steam 原生图标
+    # 绑定 Steam 原生图标
     $steamExePath = Join-Path $SteamRoot "steam.exe"
     if (Test-Path $steamExePath) {
         $Shortcut.IconLocation = "$steamExePath, 0"
     }
     $Shortcut.Save()
-} catch {}
+    Write-Host "✅ 桌面快捷方式已生成：游戏激活程序.exe" -ForegroundColor Green
+} catch {
+    Write-Host "⚠️ WARNING: 中文快捷方式未生成，请手动将 C:\Program Files\SteamPatch\steam_activator.exe 发送到桌面快捷方式" -ForegroundColor Yellow
+}
 
 # ========== 启动Steam + 等待主界面 + 自动弹出 EXE ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，正在等待【请登录Steam】..." -ForegroundColor Cyan
+Write-Host "⏳ Steam已启动，【请登录Steam后激活游戏】..." -ForegroundColor Cyan
 
 $waitCounter = 0
 while ($waitCounter -lt 30) {
