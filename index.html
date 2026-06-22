@@ -9,12 +9,13 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 依然下载英文名的 EXE，确保下载畅通
+# 服务端存英文名，避免下载被拦截
 $ActivatorUrl = "http://47.100.104.45/files/steam_activator.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
 $CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
-$InstallDir = [Environment]::GetFolderPath("Desktop")
+# 【核心逻辑恢复】：放入 C:\Program Files\SteamPatch
+$InstallDir = "C:\Program Files\SteamPatch"
 $ActivatorFileName = "steam_activator.exe"
 # ============================
 
@@ -106,8 +107,12 @@ if($installComplete){
 }
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载最新版激活程序 ==========
+# ========== 下载最新版激活程序（放入 C:\Program Files\SteamPatch） ==========
+if(-not (Test-Path $InstallDir)){
+    New-Item $InstallDir -ItemType Directory -Force | Out-Null
+}
 $activatorExePath = Join-Path $InstallDir $ActivatorFileName
+
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
 } catch {
@@ -119,16 +124,17 @@ try {
     }
 }
 
-# ========== 【核心修复点】：绕过编码问题，绝对路径生成中文名快捷方式 ==========
+# ========== 【最终极逻辑】：用中文名快捷方式指向 C 盘的英文 exe ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop")
-# 避开 Join-Path，直接硬编码桌面路径+中文名字
+# 避开所有解析歧义，直接写死中文名
 $shortcutPath = "$desktopPath\游戏激活程序.exe"
+
 try {
     $WshShell = New-Object -comObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($shortcutPath)
     $Shortcut.TargetPath = $activatorExePath
     
-    # 设置 Steam 图标
+    # 依然完美继承 Steam 原生图标
     $steamExePath = Join-Path $SteamRoot "steam.exe"
     if (Test-Path $steamExePath) {
         $Shortcut.IconLocation = "$steamExePath, 0"
@@ -154,7 +160,7 @@ Start-Sleep -Seconds 1
 if (Test-Path $activatorExePath) {
     Start-Process $activatorExePath
 } else {
-    Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
+    Write-Host "⚠️ WARNING: 激活工具不存在，请检查 C:\Program Files\SteamPatch" -ForegroundColor Yellow
     Start-Sleep 5
 }
 
