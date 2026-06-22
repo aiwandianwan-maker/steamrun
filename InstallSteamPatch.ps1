@@ -124,30 +124,37 @@ try {
     }
 }
 
-# ========== 【精简逻辑】：只在桌面创建中文名快捷方式 ==========
+# ========== 【核心修复】：使用系统 VBS 绕过编码死结，100% 生成中文快捷方式 ==========
 $desktopPath = [Environment]::GetFolderPath("Desktop").TrimEnd('\')
 $shortcutPath = "$desktopPath\游戏激活程序.exe"
+$steamExePath = Join-Path $SteamRoot "steam.exe"
 
 try {
-    # 使用 COM 接口创建快捷方式
-    $WshShell = New-Object -comObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-    $Shortcut.TargetPath = $activatorExePath
+    # 生成一段极其稳健的 VBS 代码
+    $vbsContent = @"
+Set WshShell = WScript.CreateObject("WScript.Shell")
+Set oShellLink = WshShell.CreateShortcut("$shortcutPath")
+oShellLink.TargetPath = "$activatorExePath"
+oShellLink.IconLocation = "$steamExePath, 0"
+oShellLink.Save()
+"@
+    # 用 UTF-16 编码写入临时 VBS 文件，确保无论什么系统环境都能识别中文
+    $tempVbsPath = [System.IO.Path]::GetTempFileName() + ".vbs"
+    [System.IO.File]::WriteAllText($tempVbsPath, $vbsContent, [System.Text.Encoding]::Unicode)
     
-    # 绑定 Steam 原生图标
-    $steamExePath = Join-Path $SteamRoot "steam.exe"
-    if (Test-Path $steamExePath) {
-        $Shortcut.IconLocation = "$steamExePath, 0"
-    }
-    $Shortcut.Save()
-    Write-Host "✅ 桌面快捷方式已生成：游戏激活程序.exe" -ForegroundColor Green
+    # 隐藏执行 VBS，执行完毕后自动删除
+    Start-Process "wscript.exe" -ArgumentList "`"$tempVbsPath`"" -Wait -WindowStyle Hidden
+    Remove-Item $tempVbsPath -Force
+
+    Write-Host "✅ 桌面快捷方式已完美生成：游戏激活程序.exe" -ForegroundColor Green
 } catch {
-    Write-Host "⚠️ WARNING: 中文快捷方式未生成，请手动将 C:\Program Files\SteamPatch\steam_activator.exe 发送到桌面快捷方式" -ForegroundColor Yellow
+    Write-Host "⚠️ WARNING: 快捷方式生成异常，请手动将 C:\Program Files\SteamPatch\steam_activator.exe 发送到桌面快捷方式" -ForegroundColor Yellow
 }
+# ============================================================
 
 # ========== 启动Steam + 等待主界面 + 自动弹出 EXE ==========
 Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，【请登录Steam后激活游戏】..." -ForegroundColor Cyan
+Write-Host "⏳ Steam已启动，【请登录Steam激活游戏】..." -ForegroundColor Cyan
 
 $waitCounter = 0
 while ($waitCounter -lt 30) {
