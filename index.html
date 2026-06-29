@@ -13,7 +13,7 @@ $ZipUrl = "http://47.100.104.45/files/patch.zip"
 $ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
-$CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml")
+$CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml","cloud_redirect.dll")
 $Desktop = [Environment]::GetFolderPath("Desktop")
 $ActivatorExeName = "游戏激活程序.exe"
 # ============================
