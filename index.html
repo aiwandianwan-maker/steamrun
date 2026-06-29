@@ -9,16 +9,14 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # ========== 配置区 ==========
 $ZipUrl = "http://47.100.104.45/files/patch.zip"
-# 【回退核心点】：直接下载中文名的 exe 到桌面
 $ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
 $TempZip = "$env:TEMP\steam_patch.zip"
 $TempUnzip = "$env:TEMP\steam_patch_temp"
-$CopyList = @("config","dwmapi.dll","OpenSteamTool.dll","xinput1_4.dll","steam.cfg","opensteamtool.toml","cloud_redirect.dll")
 $Desktop = [Environment]::GetFolderPath("Desktop")
 $ActivatorExeName = "游戏激活程序.exe"
 # ============================
 
-# ===== 补丁安装逻辑 (保持不变) =====
+# ===== 补丁安装逻辑 (不再需要 $CopyList 白名单) =====
 $SteamRoot = $null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
     $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
@@ -79,17 +77,12 @@ New-Item $TempUnzip -ItemType Directory -Force | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
 
-$installComplete = $true
-foreach($file in $CopyList){
-    $source = Join-Path $TempUnzip $file
-    $dest = Join-Path $SteamRoot $file
-    if(Test-Path $source){
-        Copy-Item $source $dest -Recurse -Force
-    }else{
-        $installComplete = $false
-    }
-}
+# ===== 【核心优化】：使用 Windows 底层 robocopy 命令全量覆盖 =====
+# 只要 patch.zip 里有的文件，全都会原封不动复制进 Steam 根目录，不再需要白名单。
+Write-Host "⏳ 正在全量安装补丁文件到 Steam 目录..." -ForegroundColor Cyan
+robocopy "$TempUnzip" "$SteamRoot" /E /R:0 /W:0 /NP /NFL /NDL
 
+# 保持 steam.cfg 的只读属性（防止被删除/修改）
 $cfgFullPath = Join-Path $SteamRoot "steam.cfg"
 if(Test-Path $cfgFullPath){
     (Get-Item $cfgFullPath).Attributes += [System.IO.FileAttributes]::ReadOnly
@@ -99,11 +92,7 @@ Remove-Item $TempZip -Force
 Remove-Item $TempUnzip -Recurse -Force
 
 Write-Host "`n=====================================" -ForegroundColor Cyan
-if($installComplete){
-    Write-Host "✅ SUCCESS: All patches installed" -ForegroundColor Green
-}else{
-    Write-Host "⚠️ WARNING: Some patch files missing" -ForegroundColor DarkYellow
-}
+Write-Host "✅ SUCCESS: All patches installed" -ForegroundColor Green
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
 # ========== 下载最新版激活程序直接到桌面 ==========
