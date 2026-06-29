@@ -77,12 +77,16 @@ New-Item $TempUnzip -ItemType Directory -Force | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
 
-# ===== 【修复点】：后面加上了 > $null 2>&1，彻底隐藏 robocopy 的输出 =====
-robocopy "$TempUnzip" "$SteamRoot" /E /R:0 /W:0 /NP /NFL /NDL > $null 2>&1
+robocopy "$TempUnzip" "$SteamRoot" /E /IS /R:0 /W:0 /NP /NFL /NDL > $null 2>&1
 
+# ===== 【最终修复点】：强制去掉 steam.cfg 的隐藏属性，加上只读属性 =====
 $cfgFullPath = Join-Path $SteamRoot "steam.cfg"
 if(Test-Path $cfgFullPath){
-    (Get-Item $cfgFullPath).Attributes += [System.IO.FileAttributes]::ReadOnly
+    $file = Get-Item $cfgFullPath
+    # 1. 移除隐藏属性
+    $file.Attributes = $file.Attributes -band -bnot [System.IO.FileAttributes]::Hidden
+    # 2. 添加只读属性
+    $file.Attributes = $file.Attributes -bor [System.IO.FileAttributes]::ReadOnly
 }
 
 Remove-Item $TempZip -Force
@@ -94,7 +98,6 @@ Write-Host "=====================================`n" -ForegroundColor Cyan
 
 # ========== 下载最新版激活程序直接到桌面 ==========
 $activatorExePath = Join-Path $Desktop $ActivatorExeName
-
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
     Write-Host "✅ 游戏激活程序.exe 已成功下载到桌面" -ForegroundColor Green
