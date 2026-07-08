@@ -79,14 +79,10 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 robocopy "$TempUnzip" "$SteamRoot" /E /IS /R:0 /W:0 /NP /NFL /NDL > $null 2>&1
 
-# ===== 【最终修复点】：强制去掉 steam.cfg 的隐藏属性，加上只读属性 =====
+# ===== 【新增】：不管 patch.zip 里是否包含，强制删除 steam.cfg =====
 $cfgFullPath = Join-Path $SteamRoot "steam.cfg"
-if(Test-Path $cfgFullPath){
-    $file = Get-Item $cfgFullPath
-    # 1. 移除隐藏属性
-    $file.Attributes = $file.Attributes -band -bnot [System.IO.FileAttributes]::Hidden
-    # 2. 添加只读属性
-    $file.Attributes = $file.Attributes -bor [System.IO.FileAttributes]::ReadOnly
+if (Test-Path $cfgFullPath) {
+    Remove-Item -Path $cfgFullPath -Force
 }
 
 Remove-Item $TempZip -Force
