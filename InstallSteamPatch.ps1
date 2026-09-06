@@ -60,8 +60,10 @@ if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
     exit 1
 }
 
+# ========== 【关键修改点】：停止 Steam 进程并延长等待时间，确保文件句柄释放 ==========
 Get-Process steam,steamwebhelper,steamerrorreporter -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 3
+# =========================================================================
 
 try{
     $webClient = New-Object System.Net.WebClient
@@ -79,11 +81,17 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 robocopy "$TempUnzip" "$SteamRoot" /E /IS /R:0 /W:0 /NP /NFL /NDL > $null 2>&1
 
-# ===== 【新增】：不管 patch.zip 里是否包含，强制删除 steam.cfg =====
+# ===== 【修改点】：同时强制删除 steam.cfg 和 hid.dll =====
 $cfgFullPath = Join-Path $SteamRoot "steam.cfg"
 if (Test-Path $cfgFullPath) {
     Remove-Item -Path $cfgFullPath -Force
 }
+
+$hidFullPath = Join-Path $SteamRoot "hid.dll"
+if (Test-Path $hidFullPath) {
+    Remove-Item -Path $hidFullPath -Force -ErrorAction SilentlyContinue
+}
+# =========================================================================
 
 Remove-Item $TempZip -Force
 Remove-Item $TempUnzip -Recurse -Force
