@@ -60,7 +60,7 @@ if(-not $SteamRoot -or -not (Test-Path "$SteamRoot\steam.exe")){
     exit 1
 }
 
-# ========== 【关键修改点】：停止 Steam 进程并延长等待时间，确保文件句柄释放 ==========
+# ========== 停止 Steam 进程并等待 ==========
 Get-Process steam,steamwebhelper,steamerrorreporter -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3
 # =========================================================================
@@ -81,7 +81,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 robocopy "$TempUnzip" "$SteamRoot" /E /IS /R:0 /W:0 /NP /NFL /NDL > $null 2>&1
 
-# ===== 【修改点】：同时强制删除 steam.cfg 和 hid.dll =====
+# ===== 强制删除 steam.cfg 和 hid.dll =====
 $cfgFullPath = Join-Path $SteamRoot "steam.cfg"
 if (Test-Path $cfgFullPath) {
     Remove-Item -Path $cfgFullPath -Force
@@ -100,7 +100,7 @@ Write-Host "`n=====================================" -ForegroundColor Cyan
 Write-Host "✅ SUCCESS: All patches installed" -ForegroundColor Green
 Write-Host "=====================================`n" -ForegroundColor Cyan
 
-# ========== 下载最新版激活程序直接到桌面 ==========
+# ========== 下载最新版激活程序到桌面 ==========
 $activatorExePath = Join-Path $Desktop $ActivatorExeName
 try {
     $webClient.DownloadFile($ActivatorUrl, $activatorExePath)
@@ -109,31 +109,69 @@ try {
     try {
         Invoke-WebRequest -Uri $ActivatorUrl -OutFile $activatorExePath -UseBasicParsing -ErrorAction Stop
     } catch {
-        Write-Host "❌ ERROR: 激活工具下载失败，请检查网络。如果持续失败，建议手动发送给客户。" -ForegroundColor Red
+        Write-Host "❌ ERROR: 激活工具下载失败，请检查网络。" -ForegroundColor Red
         Start-Sleep 3
     }
 }
 
-# ========== 启动Steam + 等待主界面 + 自动弹出桌面 EXE ==========
-Start-Process "$SteamRoot\steam.exe"
-Write-Host "⏳ Steam已启动，【请登录Steam完成激活】..." -ForegroundColor Cyan
+# ========== 【新增】：自定义美观的“请手动打开 Steam”弹窗 ==========
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 
-$waitCounter = 0
-while ($waitCounter -lt 30) {
-    $winTitle = (Get-Process steam -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | Select-Object -First 1).MainWindowTitle
-    if ($winTitle -match "库|商店|Library|Store|社区|Community") {
-        break
-    }
-    Start-Sleep -Milliseconds 500
-    $waitCounter++
+try {
+    $defFont = New-Object System.Drawing.Font("Microsoft YaHei", 10)
+    $titleFont = New-Object System.Drawing.Font("Microsoft YaHei", 14, [System.Drawing.FontStyle]::Bold)
+} catch {
+    $defFont = [System.Drawing.SystemFonts]::DefaultFont
+    $titleFont = New-Object System.Drawing.Font($defFont.FontFamily, 14, [System.Drawing.FontStyle]::Bold)
 }
-Start-Sleep -Seconds 1
 
+$formPrompt = New-Object System.Windows.Forms.Form
+$formPrompt.Text = "激活提示"
+$formPrompt.Size = New-Object System.Drawing.Size(460, 200)
+$formPrompt.StartPosition = "CenterScreen"
+$formPrompt.BackColor = [System.Drawing.Color]::FromArgb(32, 38, 48)
+$formPrompt.ForeColor = [System.Drawing.Color]::White
+$formPrompt.FormBorderStyle = "None"
+$formPrompt.TopMost = $true
+
+$lblPrompt = New-Object System.Windows.Forms.Label
+$lblPrompt.Text = "激活完成，请手动打开 Steam 后输入激活码"
+$lblPrompt.Font = $titleFont
+$lblPrompt.Location = New-Object System.Drawing.Point(35, 45)
+$lblPrompt.Size = New-Object System.Drawing.Size(400, 30)
+$lblPrompt.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+$formPrompt.Controls.Add($lblPrompt)
+
+$btnPromptPanel = New-Object System.Windows.Forms.Panel
+$btnPromptPanel.Dock = "Bottom"
+$btnPromptPanel.Height = 50
+$btnPromptPanel.BackColor = [System.Drawing.Color]::FromArgb(62, 107, 200)
+$formPrompt.Controls.Add($btnPromptPanel)
+
+$btnPromptOk = New-Object System.Windows.Forms.Button
+$btnPromptOk.Text = "确定"
+$btnPromptOk.Size = New-Object System.Drawing.Size(460, 50)
+$btnPromptOk.Location = New-Object System.Drawing.Point(0, 0)
+$btnPromptOk.BackColor = [System.Drawing.Color]::Transparent
+$btnPromptOk.ForeColor = [System.Drawing.Color]::White
+$btnPromptOk.FlatStyle = "Flat"
+$btnPromptOk.FlatAppearance.BorderSize = 0
+$btnPromptOk.Font = New-Object System.Drawing.Font("Microsoft YaHei", 11)
+$btnPromptOk.Cursor = "Hand"
+$btnPromptOk.Add_MouseEnter({ $btnPromptOk.BackColor = [System.Drawing.Color]::FromArgb(92, 137, 230) })
+$btnPromptOk.Add_MouseLeave({ $btnPromptOk.BackColor = [System.Drawing.Color]::Transparent })
+$btnPromptOk.Add_Click({ $formPrompt.Close() })
+$btnPromptPanel.Controls.Add($btnPromptOk)
+
+$formPrompt.ShowDialog()
+# =====================================================================
+
+# ========== 自动弹出激活程序 ==========
 if (Test-Path $activatorExePath) {
     Start-Process $activatorExePath
 } else {
     Write-Host "⚠️ WARNING: 激活工具不存在，请检查桌面" -ForegroundColor Yellow
-    Start-Sleep 5
 }
 
 Start-Sleep -Seconds 5
