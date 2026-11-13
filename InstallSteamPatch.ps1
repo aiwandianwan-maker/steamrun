@@ -81,16 +81,42 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 robocopy "$TempUnzip" "$SteamRoot" /E /IS /R:0 /W:0 /NP /NFL /NDL > $null 2>&1
 
-# ===== 【核心修改点】：清理残留的 steam.cfg、hid.dll 以及 version.dll =====
-$cfgFullPath = Join-Path $SteamRoot "steam.cfg"
-if (Test-Path $cfgFullPath) { Remove-Item -Path $cfgFullPath -Force }
-
+# ===== 去掉删除 steam.cfg 的逻辑，增加删除 sdko.dll =====
 $hidFullPath = Join-Path $SteamRoot "hid.dll"
 if (Test-Path $hidFullPath) { Remove-Item -Path $hidFullPath -Force -ErrorAction SilentlyContinue }
 
-# 【新增】：删除废弃的 version.dll
 $verFullPath = Join-Path $SteamRoot "version.dll"
 if (Test-Path $verFullPath) { Remove-Item -Path $verFullPath -Force -ErrorAction SilentlyContinue }
+
+$sdkoFullPath = Join-Path $SteamRoot "sdko.dll"
+if (Test-Path $sdkoFullPath) { Remove-Item -Path $sdkoFullPath -Force -ErrorAction SilentlyContinue }
+# =========================================================================
+
+# ===== 迁移 config\lua 文件到 config\stplug-in =====
+$LuaSourceDir = Join-Path $SteamRoot "config\lua"
+$StplugInDir  = Join-Path $SteamRoot "config\stplug-in"
+
+if (Test-Path $LuaSourceDir) {
+    # 如果 stplug-in 不存在，自动创建
+    if (-not (Test-Path $StplugInDir)) {
+        New-Item -Path $StplugInDir -ItemType Directory -Force | Out-Null
+        # 已移除提示：Write-Host "✅ 已创建 stplug-in 文件夹" -ForegroundColor Green
+    }
+
+    # 复制 lua 文件夹内所有文件到 stplug-in（保留 lua 原文件不变）
+    Get-ChildItem -Path $LuaSourceDir -File -ErrorAction SilentlyContinue | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination (Join-Path $StplugInDir $_.Name) -Force -ErrorAction SilentlyContinue
+    }
+
+    # 同时复制 lua 下的子文件夹（如存在），保持目录结构
+    Get-ChildItem -Path $LuaSourceDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination $StplugInDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # 已移除提示：Write-Host "✅ 已将 config\lua 内容复制到 config\stplug-in" -ForegroundColor Green
+} else {
+    Write-Host "⚠️ 未找到 config\lua 文件夹，跳过迁移" -ForegroundColor Yellow
+}
 # =========================================================================
 
 Remove-Item $TempZip -Force
